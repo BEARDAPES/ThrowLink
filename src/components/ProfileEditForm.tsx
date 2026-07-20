@@ -64,7 +64,7 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
 
     const nextErrors: Record<string, string> = {}
 
-    if (isPlayerAccount && !SLUG_PATTERN.test(slug)) {
+    if (!SLUG_PATTERN.test(slug)) {
       nextErrors.slug = '小文字英数字とハイフンのみ、3〜30文字で入力してください'
     }
 
@@ -94,7 +94,7 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
     await onSave({
       profile: {
         display_name: displayName,
-        slug: isPlayerAccount ? slug : profile.slug,
+        slug: slug,
         bio_text: bioText || null,
         location: location || null,
         avatar_url: avatarUrl || null,
@@ -123,17 +123,16 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required className={inputClass} />
           </div>
 
-          {isPlayerAccount && (
-            <div>
-              <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">プロフィールURL</label>
-              <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} required className={inputClass} />
-              {errors.slug ? (
-                <p className="mt-1 text-xs text-dart-red font-tl-mono">{errors.slug}</p>
-              ) : (
-                <p className="mt-1 text-xs text-chalk-dim font-tl-mono">throwlink.app/players/{slug || '...'}</p>
-              )}
-            </div>
-          )}
+
+          <div>
+            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">プロフィールURL</label>
+            <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} required className={inputClass} />
+            {errors.slug ? (
+              <p className="mt-1 text-xs text-dart-red font-tl-mono">{errors.slug}</p>
+            ) : (
+              <p className="mt-1 text-xs text-chalk-dim font-tl-mono">throwlink.app/players/{slug || '...'}</p>
+            )}
+          </div>
 
           <div>
             <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">

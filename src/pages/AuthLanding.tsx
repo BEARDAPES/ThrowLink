@@ -29,7 +29,10 @@ export function AuthLanding() {
         return
       }
 
-      navigate(profile.role === 'store' ? '/' : `/players/${profile.slug}`, { replace: true })
+      navigate(
+        profile.role === 'store' ? `/stores/${profile.slug}` : `/players/${profile.slug}`,
+        { replace: true }
+      )
     }
 
     decide()

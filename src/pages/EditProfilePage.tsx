@@ -53,7 +53,11 @@ export function EditProfilePage() {
         notes: offerUpdates.notes,
       })
     }
-    navigate(profile.role === 'store' ? '/' : `/players/${profileUpdates.slug ?? profile.slug}`)
+    navigate(
+      profile.role === 'store'
+        ? `/stores/${profileUpdates.slug ?? profile.slug}`
+        : `/players/${profileUpdates.slug ?? profile.slug}`
+    )
   }
 
   if (status === 'loading') return null
