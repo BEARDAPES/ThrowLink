@@ -7,6 +7,7 @@ type Profile = Database['public']['Tables']['profiles']['Row']
 interface ProStats {
   request_count: number
   total_mobilized: number
+  participation_count: number
 }
 
 interface PlayerProfileCardProps {
@@ -133,18 +134,37 @@ export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: Player
           </div>
         </header>
 
-        <div className="grid grid-cols-2 border-t border-b border-brass py-6 mb-10">
-          <div className="text-center">
+        <div className={`grid ${profile.is_pro ? 'grid-cols-3' : 'grid-cols-1'} border-t border-b border-brass py-6 mb-10`}>
+          {profile.is_pro && (
+            <>
+              <div className="text-center">
+                <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
+                  {stats.request_count}
+                </div>
+                <div className="mt-1 text-xs text-chalk-dim tracking-wide">被依頼回数</div>
+              </div>
+              <div className="text-center border-l border-brass/35">
+                <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
+                  {stats.total_mobilized}
+                </div>
+                <div className="mt-1 text-xs text-chalk-dim tracking-wide">延べ動員数</div>
+              </div>
+            </>
+          )}
+          <div className={`text-center ${profile.is_pro ? 'border-l border-brass/35' : ''}`}>
             <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
-              {stats.request_count}
+              {stats.participation_count}
             </div>
-            <div className="mt-1 text-xs text-chalk-dim tracking-wide">被依頼回数</div>
-          </div>
-          <div className="text-center border-l border-brass/35">
-            <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
-              {stats.total_mobilized}
-            </div>
-            <div className="mt-1 text-xs text-chalk-dim tracking-wide">延べ動員数</div>
+            {isOwner ? (
+              <Link
+                to="/me/events"
+                className="mt-1 inline-block text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-dart-red transition-colors"
+              >
+                イベント参加数
+              </Link>
+            ) : (
+              <div className="mt-1 text-xs text-chalk-dim tracking-wide">イベント参加数</div>
+            )}
           </div>
         </div>
 

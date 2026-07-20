@@ -10,7 +10,7 @@ export function PlayerProfilePage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [stats, setStats] = useState({ request_count: 0, total_mobilized: 0 })
+  const [stats, setStats] = useState({ request_count: 0, total_mobilized: 0, participation_count: 0 })
   const [isOwner, setIsOwner] = useState(false)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>('loading')
 
@@ -36,16 +36,16 @@ export function PlayerProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       setIsOwner(user?.id === profileData.id)
 
-      const { data: statsData } = await supabase.rpc('pro_stats', {
-        target_pro_id: profileData.id,
-      })
+      const [{ data: proStatsData }, { data: fanStatsData }] = await Promise.all([
+        supabase.rpc('pro_stats', { target_pro_id: profileData.id }),
+        supabase.rpc('fan_stats', { target_user_id: profileData.id }),
+      ])
 
-      if (statsData && statsData.length > 0) {
-        setStats({
-          request_count: statsData[0].request_count,
-          total_mobilized: statsData[0].total_mobilized,
-        })
-      }
+      setStats({
+        request_count: proStatsData?.[0]?.request_count ?? 0,
+        total_mobilized: proStatsData?.[0]?.total_mobilized ?? 0,
+        participation_count: fanStatsData?.[0]?.participation_count ?? 0,
+      })
 
       setStatus('ready')
     }
