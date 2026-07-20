@@ -261,6 +261,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      fan_stats: {
+        Args: { target_user_id?: string }
+        Returns: {
+          participation_count: number
+          user_id: string
+        }[]
+      }
       pro_stats: {
         Args: { target_pro_id?: string }
         Returns: {
