@@ -179,9 +179,10 @@ export type Database = {
           is_pro: boolean
           location: string | null
           onboarded: boolean
+          player_directory_url: string | null
           role: string
           slug: string | null
-          stats_url: string | null
+          sns_links: Json
           updated_at: string
         }
         Insert: {
@@ -193,9 +194,10 @@ export type Database = {
           is_pro?: boolean
           location?: string | null
           onboarded?: boolean
+          player_directory_url?: string | null
           role?: string
           slug?: string | null
-          stats_url?: string | null
+          sns_links?: Json
           updated_at?: string
         }
         Update: {
@@ -207,9 +209,10 @@ export type Database = {
           is_pro?: boolean
           location?: string | null
           onboarded?: boolean
+          player_directory_url?: string | null
           role?: string
           slug?: string | null
-          stats_url?: string | null
+          sns_links?: Json
           updated_at?: string
         }
         Relationships: []

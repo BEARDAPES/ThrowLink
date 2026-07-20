@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -13,6 +14,45 @@ interface PlayerProfileCardProps {
   stats: ProStats
   isOwner?: boolean
   onSignOut?: () => void
+}
+
+type SnsLink = { platform: string; url: string }
+
+const SNS_ICONS: Record<string, React.ReactNode> = {
+  x: <FaXTwitter />,
+  instagram: <FaInstagram />,
+  youtube: <FaYoutube />,
+  tiktok: <FaTiktok />,
+}
+
+const SNS_LABELS: Record<string, string> = {
+  x: 'X',
+  instagram: 'Instagram',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+}
+
+function parseSnsLinks(raw: Profile['sns_links']): SnsLink[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter(
+    (item): item is SnsLink =>
+      typeof item === 'object' && item !== null && 'platform' in item && 'url' in item && !!(item as SnsLink).url
+  )
+}
+
+function directoryLabel(url: string): string {
+  if (url.includes('livescore.japanprodarts.jp')) return '選手名鑑（JAPAN）'
+  if (url.includes('member.prodarts.jp')) return '選手名鑑（Perfect）'
+  return '選手名鑑'
+}
+
+function faviconUrl(url: string): string {
+  try {
+    const { hostname } = new URL(url)
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`
+  } catch {
+    return ''
+  }
 }
 
 const DART_RING = `conic-gradient(
@@ -31,6 +71,28 @@ const footerLinkClass =
 
 export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: PlayerProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
+  const snsLinks = parseSnsLinks(profile.sns_links)
+
+  const links = [
+    ...snsLinks.map((link) => ({
+      key: link.platform,
+      href: link.url,
+      label: SNS_LABELS[link.platform] ?? link.platform,
+      icon: SNS_ICONS[link.platform] ?? null,
+    })),
+    ...(profile.is_pro && profile.player_directory_url
+      ? [
+          {
+            key: 'directory',
+            href: profile.player_directory_url,
+            label: directoryLabel(profile.player_directory_url),
+            icon: (
+              <img src={faviconUrl(profile.player_directory_url)} alt="" className="w-full h-full object-contain" />
+            ),
+          },
+        ]
+      : []),
+  ]
 
   return (
     <div className="min-h-screen bg-ink font-tl-sans flex justify-center px-6 py-16 sm:py-24">
@@ -87,24 +149,33 @@ export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: Player
         </div>
 
         {profile.bio_text && (
-          <p className="text-[15px] leading-loose text-chalk mb-16">
+          <p className="text-[15px] leading-loose text-chalk mb-10">
             {profile.bio_text}
           </p>
         )}
 
-        {profile.stats_url && (
-          <a
-            href={profile.stats_url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 font-tl-mono text-sm font-semibold tracking-wide text-ink bg-dart-red px-4 py-2 rounded-sm hover:opacity-90 transition-opacity"
-          >
-            公式記録を見る ↗
-          </a>
+        {links.length > 0 && (
+          <div className="border-t border-brass/35 mb-10">
+            {links.map((link) => (
+              <a
+                key={link.key}
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 py-3 border-b border-brass/20 text-chalk hover:text-dart-red transition-colors group"
+              >
+                <span className="w-5 h-5 flex items-center justify-center shrink-0 text-chalk-dim text-lg group-hover:text-dart-red transition-colors">
+                  {link.icon}
+                </span>
+                <span className="font-tl-mono text-sm tracking-wide flex-1">{link.label}</span>
+                <span className="text-chalk-dim text-xs group-hover:text-dart-red transition-colors">↗</span>
+              </a>
+            ))}
+          </div>
         )}
 
         {isOwner ? (
-          <div className="mt-12 pt-6 border-t border-brass/35 text-center">
+          <div className="mt-4 pt-6 border-t border-brass/35 text-center">
             <Link to="/me/edit" className={footerLinkClass}>
               編集する
             </Link>
@@ -114,7 +185,7 @@ export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: Player
             </button>
           </div>
         ) : (
-          <div className="mt-12 pt-6 border-t border-brass/35 text-xs text-chalk-dim text-center leading-relaxed">
+          <div className="mt-4 pt-6 border-t border-brass/35 text-xs text-chalk-dim text-center leading-relaxed">
             店舗の方へ: 出演のご依頼はプロフィール所有者からの承認制です。
           </div>
         )}
