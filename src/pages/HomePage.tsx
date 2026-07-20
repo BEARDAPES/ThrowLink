@@ -34,18 +34,12 @@ export function HomePage() {
           className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[720px] max-w-none rounded-full opacity-[0.06]"
           style={{ background: DART_RING }}
         />
-        <Link
-          to="/sign-in"
-          className="absolute top-6 right-6 sm:top-8 sm:right-8 font-tl-mono text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-chalk transition-colors"
-        >
-          サインイン
-        </Link>
         <div className="relative">
           <p className="font-tl-mono text-xs text-chalk-dim tracking-[0.2em] mb-4 uppercase">
             ThrowLink
           </p>
           <h1 className="font-display text-4xl sm:text-6xl font-bold uppercase tracking-wide text-chalk mb-6 max-w-2xl">
-            投げた矢は、まっすぐ繋がる。
+            投げて、繋がる。
           </h1>
           <p className="text-[15px] sm:text-base leading-loose text-chalk-dim max-w-md mx-auto mb-10">
             プロソフトダーツプレイヤーと店舗を繋ぐ、イベント・集客管理システム。
