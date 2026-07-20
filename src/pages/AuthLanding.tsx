@@ -15,7 +15,7 @@ export function AuthLanding() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('slug, onboarded')
+        .select('slug, role, onboarded')
         .eq('id', user.id)
         .single()
 
@@ -24,7 +24,12 @@ export function AuthLanding() {
         return
       }
 
-      navigate(profile.onboarded ? `/players/${profile.slug}` : '/me/edit', { replace: true })
+      if (!profile.onboarded) {
+        navigate('/onboarding', { replace: true })
+        return
+      }
+
+      navigate(profile.role === 'store' ? '/' : `/players/${profile.slug}`, { replace: true })
     }
 
     decide()

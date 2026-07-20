@@ -41,6 +41,8 @@ const inputClass =
   'w-full bg-ink-2 border border-brass/50 rounded-sm px-3 py-2 text-chalk font-tl-sans focus:outline-none focus:border-dart-red transition-colors'
 
 export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEditFormProps) {
+  const isPlayerAccount = profile.role === 'player'
+
   const [displayName, setDisplayName] = useState(profile.display_name)
   const [slug, setSlug] = useState(profile.slug ?? '')
   const [bioText, setBioText] = useState(profile.bio_text ?? '')
@@ -62,7 +64,7 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
 
     const nextErrors: Record<string, string> = {}
 
-    if (!SLUG_PATTERN.test(slug)) {
+    if (isPlayerAccount && !SLUG_PATTERN.test(slug)) {
       nextErrors.slug = '小文字英数字とハイフンのみ、3〜30文字で入力してください'
     }
 
@@ -73,7 +75,7 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
       }
     }
 
-    if (directoryUrl.trim() && !DIRECTORY_PATTERNS.some((re) => re.test(directoryUrl.trim()))) {
+    if (isPlayerAccount && directoryUrl.trim() && !DIRECTORY_PATTERNS.some((re) => re.test(directoryUrl.trim()))) {
       nextErrors.directoryUrl = DIRECTORY_HINT
     }
 
@@ -92,15 +94,15 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
     await onSave({
       profile: {
         display_name: displayName,
-        slug,
+        slug: isPlayerAccount ? slug : profile.slug,
         bio_text: bioText || null,
         location: location || null,
         avatar_url: avatarUrl || null,
-        player_directory_url: directoryUrl || null,
-        is_pro: isPro,
+        player_directory_url: isPlayerAccount ? directoryUrl || null : null,
+        is_pro: isPlayerAccount ? isPro : false,
         sns_links: snsLinks,
       },
-      offerConditions: isPro ? { unit_price: unitPrice, notes } : null,
+      offerConditions: isPlayerAccount && isPro ? { unit_price: unitPrice, notes } : null,
     })
 
     setSaving(false)
@@ -115,32 +117,42 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
 
         <div className="space-y-6 pb-8 border-b border-brass/35 mb-8">
           <div>
-            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">表示名</label>
+            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">
+              {isPlayerAccount ? '表示名' : '店舗名'}
+            </label>
             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required className={inputClass} />
           </div>
 
-          <div>
-            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">プロフィールURL</label>
-            <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} required className={inputClass} />
-            {errors.slug ? (
-              <p className="mt-1 text-xs text-dart-red font-tl-mono">{errors.slug}</p>
-            ) : (
-              <p className="mt-1 text-xs text-chalk-dim font-tl-mono">throwlink.app/players/{slug || '...'}</p>
-            )}
-          </div>
+          {isPlayerAccount && (
+            <div>
+              <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">プロフィールURL</label>
+              <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} required className={inputClass} />
+              {errors.slug ? (
+                <p className="mt-1 text-xs text-dart-red font-tl-mono">{errors.slug}</p>
+              ) : (
+                <p className="mt-1 text-xs text-chalk-dim font-tl-mono">throwlink.app/players/{slug || '...'}</p>
+              )}
+            </div>
+          )}
 
           <div>
-            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">活動拠点</label>
+            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">
+              {isPlayerAccount ? '活動拠点' : '所在地・エリア'}
+            </label>
             <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass} />
           </div>
 
           <div>
-            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">自己紹介</label>
+            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">
+              {isPlayerAccount ? '自己紹介' : '店舗紹介'}
+            </label>
             <textarea value={bioText} onChange={(e) => setBioText(e.target.value)} rows={4} className={`${inputClass} resize-none`} />
           </div>
 
           <div>
-            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">プロフィール画像URL</label>
+            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">
+              {isPlayerAccount ? 'プロフィール画像URL' : '店舗ロゴ・写真URL'}
+            </label>
             <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://..." className={inputClass} />
           </div>
         </div>
@@ -162,28 +174,32 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
           ))}
         </div>
 
-        <label className="flex items-center gap-3 mb-8 cursor-pointer">
-          <input type="checkbox" checked={isPro} onChange={(e) => setIsPro(e.target.checked)} className="w-4 h-4 accent-dart-red" />
-          <span className="font-tl-mono text-sm text-chalk tracking-wide">プロプレイヤーとして活動する</span>
-        </label>
+        {isPlayerAccount && (
+          <>
+            <label className="flex items-center gap-3 mb-8 cursor-pointer">
+              <input type="checkbox" checked={isPro} onChange={(e) => setIsPro(e.target.checked)} className="w-4 h-4 accent-dart-red" />
+              <span className="font-tl-mono text-sm text-chalk tracking-wide">プロプレイヤーとして活動する</span>
+            </label>
 
-        {isPro && (
-          <div className="space-y-6 pb-8 border-b border-brass/35 mb-8">
-            <div>
-              <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">選手名鑑URL(JAPANまたはPerfect)</label>
-              <input type="url" value={directoryUrl} onChange={(e) => setDirectoryUrl(e.target.value)} placeholder="https://..." className={inputClass} />
-              {errors.directoryUrl && <p className="mt-1 text-xs text-dart-red font-tl-mono">{errors.directoryUrl}</p>}
-            </div>
-            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide">以下は店舗アカウントにのみ公開されます</p>
-            <div>
-              <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">単価などの出演条件</label>
-              <input type="text" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} className={inputClass} />
-            </div>
-            <div>
-              <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">備考</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
-            </div>
-          </div>
+            {isPro && (
+              <div className="space-y-6 pb-8 border-b border-brass/35 mb-8">
+                <div>
+                  <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">選手名鑑URL(JAPANまたはPerfect)</label>
+                  <input type="url" value={directoryUrl} onChange={(e) => setDirectoryUrl(e.target.value)} placeholder="https://..." className={inputClass} />
+                  {errors.directoryUrl && <p className="mt-1 text-xs text-dart-red font-tl-mono">{errors.directoryUrl}</p>}
+                </div>
+                <p className="font-tl-mono text-xs text-chalk-dim tracking-wide">以下は店舗アカウントにのみ公開されます</p>
+                <div>
+                  <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">単価などの出演条件</label>
+                  <input type="text" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} className={inputClass} />
+                </div>
+                <div>
+                  <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">備考</label>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <button
