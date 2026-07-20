@@ -86,15 +86,64 @@ export type Database = {
           },
         ]
       }
+      event_offers: {
+        Row: {
+          created_at: string
+          event_id: string
+          message: string | null
+          offer_status: string
+          participation_end_at: string | null
+          participation_start_at: string | null
+          pro_id: string
+          proposed_price: number | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          message?: string | null
+          offer_status?: string
+          participation_end_at?: string | null
+          participation_start_at?: string | null
+          pro_id: string
+          proposed_price?: number | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          message?: string | null
+          offer_status?: string
+          participation_end_at?: string | null
+          participation_start_at?: string | null
+          pro_id?: string
+          proposed_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_offers_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_offers_pro_id_fkey"
+            columns: ["pro_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           capacity: number
           created_at: string
-          event_date: string
+          description: string | null
+          event_end_at: string | null
+          event_start_at: string | null
           event_title: string
           id: string
           pop_image_url: string | null
-          pro_id: string
           status: string
           store_id: string | null
           updated_at: string
@@ -102,11 +151,12 @@ export type Database = {
         Insert: {
           capacity: number
           created_at?: string
-          event_date: string
+          description?: string | null
+          event_end_at?: string | null
+          event_start_at?: string | null
           event_title: string
           id?: string
           pop_image_url?: string | null
-          pro_id: string
           status?: string
           store_id?: string | null
           updated_at?: string
@@ -114,26 +164,68 @@ export type Database = {
         Update: {
           capacity?: number
           created_at?: string
-          event_date?: string
+          description?: string | null
+          event_end_at?: string | null
+          event_start_at?: string | null
           event_title?: string
           id?: string
           pop_image_url?: string | null
-          pro_id?: string
           status?: string
           store_id?: string | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "events_pro_id_fkey"
-            columns: ["pro_id"]
+            foreignKeyName: "events_store_id_fkey"
+            columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      offer_thread_items: {
+        Row: {
+          body: string | null
+          created_at: string
+          event_id: string
+          id: string
+          kind: string
+          metadata: Json | null
+          pro_id: string
+          sender_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          event_id: string
+          id?: string
+          kind: string
+          metadata?: Json | null
+          pro_id: string
+          sender_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          kind?: string
+          metadata?: Json | null
+          pro_id?: string
+          sender_id?: string | null
+        }
+        Relationships: [
           {
-            foreignKeyName: "events_store_id_fkey"
-            columns: ["store_id"]
+            foreignKeyName: "offer_thread_items_event_id_pro_id_fkey"
+            columns: ["event_id", "pro_id"]
+            isOneToOne: false
+            referencedRelation: "event_offers"
+            referencedColumns: ["event_id", "pro_id"]
+          },
+          {
+            foreignKeyName: "offer_thread_items_sender_id_fkey"
+            columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -275,6 +367,14 @@ export type Database = {
           request_count: number
           total_mobilized: number
         }[]
+      }
+      respond_to_offer: {
+        Args: {
+          accept: boolean
+          target_event_id: string
+          target_pro_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

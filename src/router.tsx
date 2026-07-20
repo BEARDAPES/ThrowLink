@@ -12,6 +12,7 @@ import { AuthLanding } from './pages/AuthLanding'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { MyEventHistoryPage } from './pages/MyEventHistoryPage'
 import { StoreDashboardPage } from './pages/StoreDashboardPage'
+import { EventDetailPage } from './pages/EventDetailPage'
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +23,8 @@ export const router = createBrowserRouter([
       { path: '/players/:slug', element: <PlayerProfilePage /> },
       { path: '/stores', element: <StoresListPage /> },
       { path: '/stores/:slug', element: <StorePage /> },
+      { path: '/events/new', element: <EventDetailPage /> },
+      { path: '/events/:id', element: <EventDetailPage /> },
       { path: '/sign-in', element: <SignInPage /> },
       { path: '/onboarding', element: <OnboardingPage /> },
       { path: '/me', element: <AuthLanding /> },
