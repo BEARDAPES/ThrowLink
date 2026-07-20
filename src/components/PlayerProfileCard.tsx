@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -10,6 +11,8 @@ interface ProStats {
 interface PlayerProfileCardProps {
   profile: Profile
   stats: ProStats
+  isOwner?: boolean
+  onSignOut?: () => void
 }
 
 const DART_RING = `conic-gradient(
@@ -23,7 +26,10 @@ const DART_RING = `conic-gradient(
   var(--color-cream) 315deg 337.5deg, var(--color-ink-2) 337.5deg 360deg
 )`
 
-export function PlayerProfileCard({ profile, stats }: PlayerProfileCardProps) {
+const footerLinkClass =
+  'font-tl-mono text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-chalk transition-colors'
+
+export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: PlayerProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
 
   return (
@@ -81,7 +87,7 @@ export function PlayerProfileCard({ profile, stats }: PlayerProfileCardProps) {
         </div>
 
         {profile.bio_text && (
-          <p className="text-[15px] leading-loose text-chalk mb-12">
+          <p className="text-[15px] leading-loose text-chalk mb-16">
             {profile.bio_text}
           </p>
         )}
@@ -97,9 +103,21 @@ export function PlayerProfileCard({ profile, stats }: PlayerProfileCardProps) {
           </a>
         )}
 
-        <div className="mt-12 pt-6 border-t border-brass/35 text-xs text-chalk-dim text-center leading-relaxed">
-          店舗の方へ: 出演のご依頼はプロフィール所有者からの承認制です。
-        </div>
+        {isOwner ? (
+          <div className="mt-12 pt-6 border-t border-brass/35 text-center">
+            <Link to="/me/edit" className={footerLinkClass}>
+              編集する
+            </Link>
+            <span className="mx-3 text-brass/50">・</span>
+            <button type="button" onClick={onSignOut} className={footerLinkClass}>
+              サインアウト
+            </button>
+          </div>
+        ) : (
+          <div className="mt-12 pt-6 border-t border-brass/35 text-xs text-chalk-dim text-center leading-relaxed">
+            店舗の方へ: 出演のご依頼はプロフィール所有者からの承認制です。
+          </div>
+        )}
       </div>
     </div>
   )
