@@ -31,7 +31,6 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
 
   const [slugError, setSlugError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,7 +41,6 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
     }
     setSlugError(null)
     setSaving(true)
-    setSaved(false)
 
     await onSave({
       profile: {
@@ -58,7 +56,6 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
     })
 
     setSaving(false)
-    setSaved(true)
   }
 
   return (
