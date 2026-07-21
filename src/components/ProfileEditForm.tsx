@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Database } from '../types/database.types'
+import { ConnectedAccountsPanel } from './ConnectedAccountsPanel'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type OfferConditions = Database['public']['Tables']['pro_offer_conditions']['Row']
@@ -115,6 +116,8 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
           プロフィール編集
         </h1>
 
+        <ConnectedAccountsPanel hasPasswordLogin={profile.has_password_login} />
+
         <div className="space-y-6 pb-8 border-b border-brass/35 mb-8">
           <div>
             <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">
@@ -122,7 +125,6 @@ export function ProfileEditForm({ profile, offerConditions, onSave }: ProfileEdi
             </label>
             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required className={inputClass} />
           </div>
-
 
           <div>
             <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">プロフィールURL</label>

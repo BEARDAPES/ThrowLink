@@ -1,0 +1,1 @@
+alter table public.profiles add column has_password_login boolean not null default false;

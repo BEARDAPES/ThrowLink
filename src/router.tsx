@@ -14,6 +14,7 @@ import { MyEventHistoryPage } from './pages/MyEventHistoryPage'
 import { StoreDashboardPage } from './pages/StoreDashboardPage'
 import { EventDetailPage } from './pages/EventDetailPage'
 import { MyOffersPage } from './pages/MyOffersPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 
 export const router = createBrowserRouter([
   {
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
       { path: '/me/dashboard', element: <StoreDashboardPage /> },
       { path: '*', element: <NotFoundPage /> },
       { path: '/me/offers', element: <MyOffersPage /> },
+      { path: '/reset-password', element: <ResetPasswordPage /> },
     ],
   },
 ])
