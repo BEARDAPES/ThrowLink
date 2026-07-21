@@ -267,6 +267,7 @@ export type Database = {
           bio_text: string | null
           created_at: string
           display_name: string
+          has_password_login: boolean
           id: string
           is_pro: boolean
           location: string | null
@@ -282,6 +283,7 @@ export type Database = {
           bio_text?: string | null
           created_at?: string
           display_name?: string
+          has_password_login?: boolean
           id: string
           is_pro?: boolean
           location?: string | null
@@ -297,6 +299,7 @@ export type Database = {
           bio_text?: string | null
           created_at?: string
           display_name?: string
+          has_password_login?: boolean
           id?: string
           is_pro?: boolean
           location?: string | null
@@ -353,6 +356,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      complete_stale_events: { Args: never; Returns: undefined }
       fan_stats: {
         Args: { target_user_id?: string }
         Returns: {
