@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
+import { EventListSection, type EventListItem } from './EventListSection'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -13,6 +14,8 @@ interface ProStats {
 interface PlayerProfileCardProps {
   profile: Profile
   stats: ProStats
+  events: EventListItem[]
+  myUpcomingEvents: EventListItem[]
   isOwner?: boolean
   onSignOut?: () => void
 }
@@ -70,7 +73,7 @@ const DART_RING = `conic-gradient(
 const footerLinkClass =
   'font-tl-mono text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-chalk transition-colors'
 
-export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: PlayerProfileCardProps) {
+export function PlayerProfileCard({ profile, stats, events, myUpcomingEvents, isOwner, onSignOut }: PlayerProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
 
@@ -174,6 +177,15 @@ export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: Player
           </p>
         )}
 
+        {profile.is_pro && <EventListSection events={events} />}
+
+        {isOwner && myUpcomingEvents.length > 0 && (
+          <div className="mb-10">
+            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">参加予定のイベント</p>
+            <EventListSection events={myUpcomingEvents} />
+          </div>
+        )}
+
         {links.length > 0 && (
           <div className="border-t border-brass/35 mb-10">
             {links.map((link) => (
@@ -196,10 +208,14 @@ export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: Player
 
         {isOwner ? (
           <div className="mt-4 pt-6 border-t border-brass/35 text-center">
-            <Link to="/me/offers" className={footerLinkClass}>
-              オファー一覧
-            </Link>
-            <span className="mx-3 text-brass/50">・</span>
+            {profile.is_pro && (
+              <>
+                <Link to="/me/offers" className={footerLinkClass}>
+                  オファー一覧
+                </Link>
+                <span className="mx-3 text-brass/50">・</span>
+              </>
+            )}
             <Link to="/me/edit" className={footerLinkClass}>
               編集する
             </Link>

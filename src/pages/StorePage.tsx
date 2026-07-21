@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { StoreProfileCard } from '../components/StoreProfileCard'
+import type { EventListItem } from '../components/EventListSection'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -10,6 +11,7 @@ export function StorePage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [events, setEvents] = useState<EventListItem[]>([])
   const [isOwner, setIsOwner] = useState(false)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>('loading')
 
@@ -36,6 +38,16 @@ export function StorePage() {
       const { data: { user } } = await supabase.auth.getUser()
       setIsOwner(user?.id === profileData.id)
 
+      const { data: eventsData } = await supabase
+        .from('events')
+        .select('id, event_title, event_start_at, status')
+        .eq('store_id', profileData.id)
+        .in('status', ['published', 'completed'])
+
+      setEvents(
+        (eventsData ?? []).map((e) => ({ id: e.id, title: e.event_title, startAt: e.event_start_at, status: e.status }))
+      )
+
       setStatus('ready')
     }
 
@@ -57,5 +69,5 @@ export function StorePage() {
     )
   }
 
-  return <StoreProfileCard profile={profile} isOwner={isOwner} onSignOut={handleSignOut} />
+  return <StoreProfileCard profile={profile} events={events} isOwner={isOwner} onSignOut={handleSignOut} />
 }
