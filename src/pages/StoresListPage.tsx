@@ -14,6 +14,7 @@ export function StoresListPage() {
         .from('profiles')
         .select('*')
         .eq('role', 'store')
+        .eq('onboarded', true)
         .not('slug', 'is', null)
         .order('created_at', { ascending: false })
       setStores(data ?? [])

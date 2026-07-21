@@ -14,6 +14,7 @@ export function PlayersListPage() {
         .from('profiles')
         .select('*')
         .eq('role', 'player')
+        .eq('onboarded', true)
         .not('slug', 'is', null)
         .order('created_at', { ascending: false })
       setPlayers(data ?? [])
