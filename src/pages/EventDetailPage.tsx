@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { OfferPanel } from '../components/OfferPanel'
 import { IncomingOfferPanel } from '../components/IncomingOfferPanel'
+import { EventReservationPanel } from '../components/EventReservationPanel'
+import { AttendeeListSection, type Attendee } from '../components/AttendeeListSection'
 import { TimeSelect } from '../components/TimeSelect'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { splitIso, combineToIso } from '../lib/datetime'
@@ -29,6 +31,7 @@ export function EventDetailPage() {
   const [event, setEvent] = useState<EventWithStore | null>(null)
   const [offers, setOffers] = useState<OfferRow[]>([])
   const [myOffer, setMyOffer] = useState<OfferRow | null>(null)
+  const [attendees, setAttendees] = useState<Attendee[]>([])
   const [unitPriceByPro, setUnitPriceByPro] = useState<Record<string, string | null>>({})
   const [isOwner, setIsOwner] = useState(isNew)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>(isNew ? 'ready' : 'loading')
@@ -52,6 +55,7 @@ export function EventDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false)
   const [apologyMessage, setApologyMessage] = useState(DEFAULT_APOLOGY)
+  const offerRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   async function load() {
     if (!id) return
@@ -101,6 +105,26 @@ export function EventDetailPage() {
       const { data: conditionsData } = await supabase.from('pro_offer_conditions').select('pro_id, unit_price').in('pro_id', proIds)
       setUnitPriceByPro(Object.fromEntries((conditionsData ?? []).map((c) => [c.pro_id, c.unit_price])))
     }
+
+    // 参加予定者(確定・キャンセル待ち)は、公開/終了済みイベントであれば
+    // 誰でも見られる(RLS側も同じ条件で許可している)。
+    const { data: attendeesData } = await supabase
+      .from('reservations')
+      .select('user_id, status, profiles(display_name, avatar_url, is_pro, slug)')
+      .eq('event_id', id)
+      .in('status', ['confirmed', 'waitlisted'])
+
+    const attendeeItems: Attendee[] = (attendeesData ?? [])
+      .filter((a) => a.profiles)
+      .map((a) => ({
+        id: a.user_id,
+        displayName: a.profiles!.display_name,
+        avatarUrl: a.profiles!.avatar_url,
+        isPro: a.profiles!.is_pro,
+        slug: a.profiles!.slug,
+        reservationStatus: a.status as 'confirmed' | 'waitlisted',
+      }))
+    setAttendees(attendeeItems)
 
     setStatus('ready')
   }
@@ -180,7 +204,7 @@ export function EventDetailPage() {
     await load()
   }
 
-  async function addCandidate(candidate: ProfileRow) {
+  async function addCandidate(candidate: { id: string }) {
     if (!id) return
     const existing = offers.find((o) => o.pro_id === candidate.id)
     if (existing) {
@@ -191,6 +215,9 @@ export function EventDetailPage() {
     setQuery('')
     setResults([])
     await load()
+    requestAnimationFrame(() => {
+      offerRefs.current[candidate.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
   }
 
   async function withdrawOffer(offer: OfferRow) {
@@ -259,6 +286,8 @@ export function EventDetailPage() {
   const affectedOffersOnCancel = offers.filter((o) => o.offer_status === 'pending' || o.offer_status === 'accepted')
   const isCancelled = event?.status === 'cancelled'
   const showEditableForm = isOwner && !isCancelled
+  const isExcludedAsGuest = myOffer ? ['pending', 'accepted'].includes(myOffer.offer_status) : false
+  const offeredProIds = new Set(offers.map((o) => o.pro_id))
 
   return (
     <div className="min-h-screen bg-ink font-tl-sans px-6 py-16 flex justify-center">
@@ -394,6 +423,16 @@ export function EventDetailPage() {
           </div>
         )}
 
+        {!isOwner && event?.status === 'published' && (
+          isExcludedAsGuest ? (
+            <p className="text-xs text-chalk-dim mb-10 pb-8 border-b border-brass/35">
+              このイベントの出演者として、一般参加枠へは申し込めません。
+            </p>
+          ) : (
+            <EventReservationPanel eventId={event.id} capacity={event.capacity} />
+          )
+        )}
+
         {acceptedOffers.length > 0 && (
           <div className="mb-10">
             <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">出演プレイヤー</p>
@@ -407,6 +446,13 @@ export function EventDetailPage() {
           </div>
         )}
 
+        <AttendeeListSection
+          attendees={attendees}
+          offeredProIds={offeredProIds}
+          canOffer={isOwner && !isCancelled}
+          onOffer={(attendee) => addCandidate({ id: attendee.id })}
+        />
+
         {isOwner && !isNew && !isCancelled && (
           <div className="space-y-3 pb-8 border-b border-brass/35 mb-8">
             <p className="font-tl-mono text-xs text-chalk-dim tracking-wide">出演オファー(任意・複数可)</p>
@@ -414,18 +460,19 @@ export function EventDetailPage() {
             {offers.length > 0 && (
               <div className="space-y-2">
                 {offers.map((offer) => (
-                  <OfferPanel
-                    key={offer.pro_id}
-                    offer={offer}
-                    proName={offer.profiles?.display_name ?? ''}
-                    storeId={event?.store_id ?? ''}
-                    eventStatus={event?.status ?? 'draft'}
-                    defaultUnitPrice={unitPriceByPro[offer.pro_id] ?? null}
-                    eventStartAt={event?.event_start_at ?? null}
-                    eventEndAt={event?.event_end_at ?? null}
-                    onChanged={load}
-                    onWithdraw={() => withdrawOffer(offer)}
-                  />
+                  <div key={offer.pro_id} ref={(el) => { offerRefs.current[offer.pro_id] = el }}>
+                    <OfferPanel
+                      offer={offer}
+                      proName={offer.profiles?.display_name ?? ''}
+                      storeId={event?.store_id ?? ''}
+                      eventStatus={event?.status ?? 'draft'}
+                      defaultUnitPrice={unitPriceByPro[offer.pro_id] ?? null}
+                      eventStartAt={event?.event_start_at ?? null}
+                      eventEndAt={event?.event_end_at ?? null}
+                      onChanged={load}
+                      onWithdraw={() => withdrawOffer(offer)}
+                    />
+                  </div>
                 ))}
               </div>
             )}
