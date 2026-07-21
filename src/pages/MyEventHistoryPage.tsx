@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 
 interface HistoryItem {
   eventTitle: string
-  eventDate: string
+  eventStartAt: string | null
   storeName: string | null
 }
 
@@ -22,7 +22,7 @@ export function MyEventHistoryPage() {
 
       const { data: reservations } = await supabase
         .from('reservations')
-        .select('events(event_title, event_date, status, store_id)')
+        .select('events(event_title, event_start_at, status, store_id)')
         .eq('user_id', user.id)
         .eq('status', 'confirmed')
 
@@ -40,10 +40,10 @@ export function MyEventHistoryPage() {
       const history = completed
         .map((e) => ({
           eventTitle: e.event_title,
-          eventDate: e.event_date,
+          eventStartAt: e.event_start_at,
           storeName: e.store_id ? storeNameById.get(e.store_id) ?? null : null,
         }))
-        .sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime())
+        .sort((a, b) => new Date(b.eventStartAt ?? 0).getTime() - new Date(a.eventStartAt ?? 0).getTime())
 
       setItems(history)
     }
@@ -67,7 +67,7 @@ export function MyEventHistoryPage() {
             {items.map((item, i) => (
               <div key={i} className="py-4 border-b border-brass/20">
                 <div className="font-tl-mono text-xs text-chalk-dim tracking-wide">
-                  {new Date(item.eventDate).toLocaleDateString('ja-JP')}
+                  {item.eventStartAt ? new Date(item.eventStartAt).toLocaleDateString('ja-JP') : '日程未定'}
                 </div>
                 <div className="text-chalk mt-1">{item.eventTitle}</div>
                 {item.storeName && <div className="text-xs text-chalk-dim mt-0.5">{item.storeName}</div>}
