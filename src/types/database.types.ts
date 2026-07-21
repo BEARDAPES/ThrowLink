@@ -360,6 +360,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      pro_has_active_offer: {
+        Args: { p_event_id: string; p_pro_id: string }
+        Returns: boolean
+      }
       pro_stats: {
         Args: { target_pro_id?: string }
         Returns: {
@@ -374,6 +378,10 @@ export type Database = {
           target_event_id: string
           target_pro_id: string
         }
+        Returns: undefined
+      }
+      revert_offer_acceptance: {
+        Args: { target_event_id: string; target_pro_id: string }
         Returns: undefined
       }
     }

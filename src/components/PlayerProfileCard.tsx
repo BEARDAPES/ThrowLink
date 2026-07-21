@@ -196,6 +196,10 @@ export function PlayerProfileCard({ profile, stats, isOwner, onSignOut }: Player
 
         {isOwner ? (
           <div className="mt-4 pt-6 border-t border-brass/35 text-center">
+            <Link to="/me/offers" className={footerLinkClass}>
+              オファー一覧
+            </Link>
+            <span className="mx-3 text-brass/50">・</span>
             <Link to="/me/edit" className={footerLinkClass}>
               編集する
             </Link>

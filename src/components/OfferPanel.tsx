@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { TimeSelect } from './TimeSelect'
-import { splitIso, combineToIso, formatDateTime } from '../lib/datetime'
+import { OfferThreadView } from './OfferThreadView'
+import { splitIso, combineToIso } from '../lib/datetime'
 import type { Database } from '../types/database.types'
 
 type OfferRow = Database['public']['Tables']['event_offers']['Row']
@@ -25,53 +26,10 @@ function formatPrice(value: unknown): string {
   return typeof value === 'number' ? `${value.toLocaleString()}円` : '未設定'
 }
 
-function describeStatusChange(status: string): string {
-  switch (status) {
-    case 'pending': return 'オファーが送信されました'
-    case 'accepted': return 'オファーが承諾されました'
-    case 'declined': return 'オファーが辞退されました'
-    case 'withdrawn': return 'オファーが取り下げられました'
-    case 'candidate': return '再オファーの準備が始まりました'
-    default: return ''
-  }
-}
-
-function describeItem(item: ThreadItem): string {
-  const meta = item.metadata as Record<string, unknown> | null
-  switch (item.kind) {
-    case 'price_change':
-      return `金額が ${formatPrice(meta?.old)} → ${formatPrice(meta?.new)} に変更されました`
-    case 'participation_time_change':
-      return `参加時間帯が ${formatDateTime(meta?.old_start as string ?? null)}〜${formatDateTime(meta?.old_end as string ?? null)} → ${formatDateTime(meta?.new_start as string ?? null)}〜${formatDateTime(meta?.new_end as string ?? null)} に変更されました`
-    case 'date_change':
-      return `イベント日時が ${formatDateTime(meta?.new_start as string ?? null)}〜${formatDateTime(meta?.new_end as string ?? null)} に変更されました`
-    case 'status_change':
-      return describeStatusChange((meta?.status as string) ?? '')
-    default:
-      return ''
-  }
-}
-
-function dateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })
-}
-
-function timeLabel(iso: string): string {
-  return new Date(iso).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
-}
-
-function groupByDate(items: ThreadItem[]): { date: string; items: ThreadItem[] }[] {
-  const groups: { date: string; items: ThreadItem[] }[] = []
-  for (const item of items) {
-    const label = dateLabel(item.created_at)
-    const last = groups[groups.length - 1]
-    if (last && last.date === label) {
-      last.items.push(item)
-    } else {
-      groups.push({ date: label, items: [item] })
-    }
-  }
-  return groups
+function sameInstant(a: string | null, b: string | null): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return new Date(a).getTime() === new Date(b).getTime()
 }
 
 const inputClass =
@@ -81,6 +39,7 @@ interface OfferPanelProps {
   offer: OfferRow
   proName: string
   storeId: string
+  eventStatus: string
   defaultUnitPrice: string | null
   eventStartAt: string | null
   eventEndAt: string | null
@@ -88,18 +47,14 @@ interface OfferPanelProps {
   onWithdraw: () => void
 }
 
-export function OfferPanel({ offer, proName, storeId, defaultUnitPrice, eventStartAt, eventEndAt, onChanged, onWithdraw }: OfferPanelProps) {
+export function OfferPanel({ offer, proName, storeId, eventStatus, defaultUnitPrice, eventStartAt, eventEndAt, onChanged, onWithdraw }: OfferPanelProps) {
   const [items, setItems] = useState<ThreadItem[]>([])
-
-  const bottomRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [items])
-
   const [chatMessage, setChatMessage] = useState('')
   const [sendingChat, setSendingChat] = useState(false)
   const [sendingOffer, setSendingOffer] = useState(false)
   const [composeMessage, setComposeMessage] = useState('')
+  const [changeReason, setChangeReason] = useState('')
+  const [savingChange, setSavingChange] = useState(false)
 
   const [price, setPrice] = useState(offer.proposed_price != null ? String(offer.proposed_price) : extractDigits(defaultUnitPrice))
   const startInit = splitIso(offer.participation_start_at ?? eventStartAt)
@@ -139,7 +94,16 @@ export function OfferPanel({ offer, proName, storeId, defaultUnitPrice, eventSta
     if (date && !startDate) setStartDate(date)
   }
 
-  const canSend = price.trim() !== '' && startDate !== '' && endDate !== '' && composeMessage.trim() !== ''
+  const conditionsReady = price.trim() !== '' && startDate !== '' && endDate !== ''
+  const canSend = conditionsReady && composeMessage.trim() !== ''
+
+  const currentPriceNum = price ? Number(price) : null
+  const currentStartIso = combineToIso(startDate, startHour, startMinute)
+  const currentEndIso = combineToIso(endDate, endHour, endMinute)
+  const hasConditionChanged =
+    currentPriceNum !== offer.proposed_price ||
+    !sameInstant(currentStartIso, offer.participation_start_at) ||
+    !sameInstant(currentEndIso, offer.participation_end_at)
 
   async function sendOffer() {
     setSendingOffer(true)
@@ -170,16 +134,31 @@ export function OfferPanel({ offer, proName, storeId, defaultUnitPrice, eventSta
     onChanged()
   }
 
-  async function updateConditions() {
+  async function submitConditionChange() {
+    setSavingChange(true)
+    const { data: { user } } = await supabase.auth.getUser()
+
     await supabase
       .from('event_offers')
       .update({
+        offer_status: 'pending',
         proposed_price: price ? Number(price) : null,
         participation_start_at: combineToIso(startDate, startHour, startMinute),
         participation_end_at: combineToIso(endDate, endHour, endMinute),
       })
       .eq('event_id', offer.event_id)
       .eq('pro_id', offer.pro_id)
+
+    await supabase.from('offer_thread_items').insert({
+      event_id: offer.event_id,
+      pro_id: offer.pro_id,
+      kind: 'message',
+      sender_id: user?.id,
+      body: changeReason,
+    })
+
+    setChangeReason('')
+    setSavingChange(false)
     onChanged()
   }
 
@@ -206,7 +185,7 @@ export function OfferPanel({ offer, proName, storeId, defaultUnitPrice, eventSta
 
   const isComposing = offer.offer_status === 'candidate'
   const canWithdraw = ['candidate', 'pending', 'accepted'].includes(offer.offer_status)
-  const groups = groupByDate(items)
+  const canEditConditions = offer.offer_status === 'pending' || (offer.offer_status === 'accepted' && eventStatus === 'draft')
 
   return (
     <div className="bg-ink-2 border border-brass/50 rounded-sm px-3 py-3">
@@ -232,40 +211,7 @@ export function OfferPanel({ offer, proName, storeId, defaultUnitPrice, eventSta
         </div>
       </div>
 
-      {groups.length > 0 && (
-        <div className="space-y-3 my-3 max-h-72 overflow-y-auto">
-          {groups.map((group) => (
-            <div key={group.date}>
-              <div className="text-center font-tl-mono text-[10px] text-chalk-dim tracking-widest uppercase mb-2">
-                {group.date}
-              </div>
-              <div className="space-y-1.5">
-                {group.items.map((item) => {
-                  if (item.kind !== 'message') {
-                    return (
-                      <div key={item.id} className="text-center font-tl-mono text-[11px] text-chalk-dim italic">
-                        {describeItem(item)} ・ {timeLabel(item.created_at)}
-                      </div>
-                    )
-                  }
-                  const isStore = item.sender_id === storeId
-                  return (
-                    <div key={item.id} className={`flex ${isStore ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[80%] rounded-sm px-3 py-1.5 ${isStore ? 'bg-dart-red/15 border border-dart-red/40' : 'bg-ink border border-brass/30'}`}>
-                        <div className="font-tl-mono text-[10px] text-chalk-dim mb-0.5">
-                          {isStore ? '店舗' : proName} ・ {timeLabel(item.created_at)}
-                        </div>
-                        <div className="text-chalk text-sm">{item.body}</div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      )}
+      <OfferThreadView items={items} storeId={storeId} storeName="店舗" proName={proName} />
 
       {isComposing ? (
         <div className="space-y-3 mt-3 pt-3 border-t border-brass/20">
@@ -306,9 +252,16 @@ export function OfferPanel({ offer, proName, storeId, defaultUnitPrice, eventSta
         </div>
       ) : (
         <>
-          {offer.offer_status !== 'accepted' && offer.offer_status !== 'declined' && offer.offer_status !== 'withdrawn' && (
-            <div className="text-xs mt-3 pt-3 border-t border-brass/20">
-              <p className="font-tl-mono text-chalk-dim mb-2">オファー条件</p>
+          {canEditConditions && (
+            <div className="mt-3 pt-3 border-t border-brass/20">
+              <p className="font-tl-mono text-xs text-chalk-dim mb-2">オファー条件の変更</p>
+              {offer.offer_status === 'accepted' && (
+                <div className="bg-dart-red/10 border border-dart-red/30 rounded-sm px-3 py-2 mb-3">
+                  <p className="text-xs text-chalk leading-relaxed">
+                    承諾済みのオファーです。変更を送信すると、変更理由がプレイヤーに送られ、オファーは未承諾の状態に戻ります。
+                  </p>
+                </div>
+              )}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <input type="number" inputMode="numeric" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className={inputClass} />
@@ -322,13 +275,21 @@ export function OfferPanel({ offer, proName, storeId, defaultUnitPrice, eventSta
                   <input type="date" value={endDate} onChange={(e) => setEnd(e.target.value, endHour, endMinute)} className={inputClass} />
                   <TimeSelect hour={endHour} minute={endMinute} onChange={(h, m) => setEnd(endDate, h, m)} />
                 </div>
+                <div>
+                  <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1">変更理由(プレイヤーに送信されます)</label>
+                  <textarea value={changeReason} onChange={(e) => setChangeReason(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
+                </div>
                 <button
                   type="button"
-                  onClick={updateConditions}
-                  className="font-tl-mono text-xs font-semibold text-chalk border border-brass px-3 py-2 rounded-sm hover:border-dart-red hover:text-dart-red transition-colors"
+                  onClick={submitConditionChange}
+                  disabled={!changeReason.trim() || !hasConditionChanged || savingChange}
+                  className="font-tl-mono text-xs font-semibold text-ink bg-dart-red px-3 py-2 rounded-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  条件を更新
+                  {savingChange ? '送信中...' : 'オファー内容を変更する'}
                 </button>
+                {changeReason.trim() && !hasConditionChanged && (
+                  <p className="text-xs text-chalk-dim">オファー内容が変更されていません。金額または参加時間帯を変えると送信できます。</p>
+                )}
               </div>
             </div>
           )}

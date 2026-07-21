@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { OfferPanel } from '../components/OfferPanel'
+import { IncomingOfferPanel } from '../components/IncomingOfferPanel'
 import { TimeSelect } from '../components/TimeSelect'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { splitIso, combineToIso } from '../lib/datetime'
 import type { Database } from '../types/database.types'
 
 type EventRow = Database['public']['Tables']['events']['Row']
+type EventWithStore = EventRow & { profiles: { display_name: string; slug: string | null } | null }
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type OfferRow = Database['public']['Tables']['event_offers']['Row'] & {
   profiles: { display_name: string; slug: string | null } | null
@@ -24,8 +26,9 @@ export function EventDetailPage() {
   const isNew = !id
   const navigate = useNavigate()
 
-  const [event, setEvent] = useState<EventRow | null>(null)
+  const [event, setEvent] = useState<EventWithStore | null>(null)
   const [offers, setOffers] = useState<OfferRow[]>([])
+  const [myOffer, setMyOffer] = useState<OfferRow | null>(null)
   const [unitPriceByPro, setUnitPriceByPro] = useState<Record<string, string | null>>({})
   const [isOwner, setIsOwner] = useState(isNew)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>(isNew ? 'ready' : 'loading')
@@ -47,16 +50,21 @@ export function EventDetailPage() {
 
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false)
   const [apologyMessage, setApologyMessage] = useState(DEFAULT_APOLOGY)
 
   async function load() {
     if (!id) return
-    const { data: eventData, error } = await supabase.from('events').select('*').eq('id', id).maybeSingle()
+    const { data: eventData, error } = await supabase
+      .from('events')
+      .select('*, profiles!events_store_id_fkey(display_name, slug)')
+      .eq('id', id)
+      .maybeSingle()
     if (error || !eventData) {
       setStatus('not-found')
       return
     }
-    setEvent(eventData)
+    setEvent(eventData as EventWithStore)
     setTitle(eventData.event_title)
     setCapacity(String(eventData.capacity))
     setDescription(eventData.description ?? '')
@@ -78,6 +86,15 @@ export function EventDetailPage() {
       .select('*, profiles(display_name, slug)')
       .eq('event_id', id)
     setOffers((offersData as OfferRow[]) ?? [])
+
+    const { data: myOfferData } = await supabase
+      .from('event_offers')
+      .select('*, profiles(display_name, slug)')
+      .eq('event_id', id)
+      .eq('pro_id', user?.id ?? '')
+      .neq('offer_status', 'candidate')
+      .maybeSingle()
+    setMyOffer(myOfferData as OfferRow | null)
 
     const proIds = (offersData ?? []).map((o) => o.pro_id)
     if (proIds.length > 0) {
@@ -169,7 +186,7 @@ export function EventDetailPage() {
     if (existing) {
       await supabase.from('event_offers').update({ offer_status: 'candidate' }).eq('event_id', id).eq('pro_id', candidate.id)
     } else {
-      await supabase.from('event_offers').insert({ event_id: id, pro_id: candidate.id })
+      await supabase.from('event_offers').insert({ event_id: id, pro_id: candidate.id, offer_status: 'candidate' })
     }
     setQuery('')
     setResults([])
@@ -189,6 +206,13 @@ export function EventDetailPage() {
   async function publish() {
     if (!id) return
     await supabase.from('events').update({ status: 'published' }).eq('id', id)
+    await load()
+  }
+
+  async function confirmUnpublish() {
+    if (!id) return
+    await supabase.from('events').update({ status: 'draft' }).eq('id', id)
+    setShowUnpublishConfirm(false)
     await load()
   }
 
@@ -320,6 +344,21 @@ export function EventDetailPage() {
           event && (
             <div className="mb-10">
               <h1 className="font-display text-3xl font-bold uppercase tracking-wide text-chalk mb-2">{event.event_title}</h1>
+              {event.profiles && (
+                <p className="font-tl-mono text-sm text-chalk-dim mb-1">
+                  主催:{' '}
+                  {event.profiles.slug ? (
+                    <Link
+                      to={`/stores/${event.profiles.slug}`}
+                      className="underline decoration-brass/50 underline-offset-4 hover:text-dart-red transition-colors"
+                    >
+                      {event.profiles.display_name}
+                    </Link>
+                  ) : (
+                    event.profiles.display_name
+                  )}
+                </p>
+              )}
               <p className="font-tl-mono text-sm text-chalk-dim mb-1">
                 {event.event_start_at ? new Date(event.event_start_at).toLocaleString('ja-JP') : '日程未定'}
                 {event.event_end_at && ` 〜 ${new Date(event.event_end_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`}
@@ -341,6 +380,18 @@ export function EventDetailPage() {
               )}
             </div>
           )
+        )}
+
+        {myOffer && !isOwner && (
+          <div className="mb-10">
+            <IncomingOfferPanel
+              offer={myOffer}
+              storeId={event?.store_id ?? ''}
+              storeName={event?.profiles?.display_name ?? '店舗'}
+              eventStatus={event?.status ?? 'draft'}
+              onChanged={load}
+            />
+          </div>
         )}
 
         {acceptedOffers.length > 0 && (
@@ -368,6 +419,7 @@ export function EventDetailPage() {
                     offer={offer}
                     proName={offer.profiles?.display_name ?? ''}
                     storeId={event?.store_id ?? ''}
+                    eventStatus={event?.status ?? 'draft'}
                     defaultUnitPrice={unitPriceByPro[offer.pro_id] ?? null}
                     eventStartAt={event?.event_start_at ?? null}
                     eventEndAt={event?.event_end_at ?? null}
@@ -406,6 +458,18 @@ export function EventDetailPage() {
           </div>
         )}
 
+        {isOwner && !isNew && event?.status === 'published' && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowUnpublishConfirm(true)}
+              className="font-tl-mono text-sm font-semibold tracking-wide text-chalk border border-brass px-4 py-2 rounded-sm hover:border-dart-red hover:text-dart-red transition-colors"
+            >
+              非公開に戻す
+            </button>
+          </div>
+        )}
+
         {showCancelConfirm && (
           <ConfirmDialog
             title="イベントをキャンセルしますか？"
@@ -439,6 +503,17 @@ export function EventDetailPage() {
             cancelLabel="削除しない"
             onConfirm={confirmDelete}
             onCancel={() => setShowDeleteConfirm(false)}
+          />
+        )}
+
+        {showUnpublishConfirm && (
+          <ConfirmDialog
+            title="イベントを非公開に戻しますか？"
+            description="非公開にすると一般には表示されなくなります。承諾済みのオファー条件を変更したい場合などにご利用ください。"
+            confirmLabel="非公開に戻す"
+            cancelLabel="戻さない"
+            onConfirm={confirmUnpublish}
+            onCancel={() => setShowUnpublishConfirm(false)}
           />
         )}
       </div>

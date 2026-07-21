@@ -13,6 +13,7 @@ import { OnboardingPage } from './pages/OnboardingPage'
 import { MyEventHistoryPage } from './pages/MyEventHistoryPage'
 import { StoreDashboardPage } from './pages/StoreDashboardPage'
 import { EventDetailPage } from './pages/EventDetailPage'
+import { MyOffersPage } from './pages/MyOffersPage'
 
 export const router = createBrowserRouter([
   {
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
       { path: '/me/events', element: <MyEventHistoryPage /> },
       { path: '/me/dashboard', element: <StoreDashboardPage /> },
       { path: '*', element: <NotFoundPage /> },
+      { path: '/me/offers', element: <MyOffersPage /> },
     ],
   },
 ])
