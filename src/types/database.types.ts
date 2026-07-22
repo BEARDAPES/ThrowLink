@@ -232,23 +232,86 @@ export type Database = {
           },
         ]
       }
+      players: {
+        Row: {
+          achievements: Json
+          dart_setup: string | null
+          darts_live_rating: number | null
+          home_shop_id: string | null
+          home_shop_text: string | null
+          id: string
+          is_pro: boolean
+          phoenix_rating: number | null
+          player_directory_url: string | null
+          sake_rating: number | null
+          status_tags: Json
+          years_playing: number | null
+        }
+        Insert: {
+          achievements?: Json
+          dart_setup?: string | null
+          darts_live_rating?: number | null
+          home_shop_id?: string | null
+          home_shop_text?: string | null
+          id: string
+          is_pro?: boolean
+          phoenix_rating?: number | null
+          player_directory_url?: string | null
+          sake_rating?: number | null
+          status_tags?: Json
+          years_playing?: number | null
+        }
+        Update: {
+          achievements?: Json
+          dart_setup?: string | null
+          darts_live_rating?: number | null
+          home_shop_id?: string | null
+          home_shop_text?: string | null
+          id?: string
+          is_pro?: boolean
+          phoenix_rating?: number | null
+          player_directory_url?: string | null
+          sake_rating?: number | null
+          status_tags?: Json
+          years_playing?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "players_home_shop_id_fkey"
+            columns: ["home_shop_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "players_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pro_offer_conditions: {
         Row: {
           notes: string | null
+          pricing_type: string | null
           pro_id: string
-          unit_price: string | null
+          unit_price_amount: number | null
           updated_at: string
         }
         Insert: {
           notes?: string | null
+          pricing_type?: string | null
           pro_id: string
-          unit_price?: string | null
+          unit_price_amount?: number | null
           updated_at?: string
         }
         Update: {
           notes?: string | null
+          pricing_type?: string | null
           pro_id?: string
-          unit_price?: string | null
+          unit_price_amount?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -269,10 +332,8 @@ export type Database = {
           display_name: string
           has_password_login: boolean
           id: string
-          is_pro: boolean
           location: string | null
           onboarded: boolean
-          player_directory_url: string | null
           role: string
           slug: string | null
           sns_links: Json
@@ -285,10 +346,8 @@ export type Database = {
           display_name?: string
           has_password_login?: boolean
           id: string
-          is_pro?: boolean
           location?: string | null
           onboarded?: boolean
-          player_directory_url?: string | null
           role?: string
           slug?: string | null
           sns_links?: Json
@@ -301,10 +360,8 @@ export type Database = {
           display_name?: string
           has_password_login?: boolean
           id?: string
-          is_pro?: boolean
           location?: string | null
           onboarded?: boolean
-          player_directory_url?: string | null
           role?: string
           slug?: string | null
           sns_links?: Json
@@ -346,6 +403,26 @@ export type Database = {
             foreignKeyName: "reservations_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stores: {
+        Row: {
+          id: string
+        }
+        Insert: {
+          id: string
+        }
+        Update: {
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stores_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },

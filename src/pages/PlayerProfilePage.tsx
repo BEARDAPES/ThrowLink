@@ -6,11 +6,13 @@ import type { EventListItem } from '../components/EventListSection'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
+type PlayerRow = Database['public']['Tables']['players']['Row']
 
 export function PlayerProfilePage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [player, setPlayer] = useState<PlayerRow | null>(null)
   const [stats, setStats] = useState({ request_count: 0, total_mobilized: 0, participation_count: 0 })
   const [events, setEvents] = useState<EventListItem[]>([])
   const [myUpcomingEvents, setMyUpcomingEvents] = useState<EventListItem[]>([])
@@ -36,6 +38,13 @@ export function PlayerProfilePage() {
 
       setProfile(profileData)
 
+      const { data: playerData } = await supabase
+        .from('players')
+        .select('*')
+        .eq('id', profileData.id)
+        .maybeSingle()
+      setPlayer(playerData)
+
       const { data: { user } } = await supabase.auth.getUser()
       const isOwnerNow = user?.id === profileData.id
       setIsOwner(isOwnerNow)
@@ -51,7 +60,7 @@ export function PlayerProfilePage() {
         participation_count: fanStatsData?.[0]?.participation_count ?? 0,
       })
 
-      if (profileData.is_pro) {
+      if (playerData?.is_pro) {
         const { data: offersData } = await supabase
           .from('event_offers')
           .select('events(id, event_title, event_start_at, status)')
@@ -65,7 +74,6 @@ export function PlayerProfilePage() {
         setEvents(items)
       }
 
-      // is_proに関わらず、本人が見ているときだけ「参加予定のイベント」を取得する。
       if (isOwnerNow) {
         const { data: reservationsData } = await supabase
           .from('reservations')
@@ -104,6 +112,7 @@ export function PlayerProfilePage() {
   return (
     <PlayerProfileCard
       profile={profile}
+      player={player}
       stats={stats}
       events={events}
       myUpcomingEvents={myUpcomingEvents}

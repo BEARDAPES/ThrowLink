@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { OfferPanel } from '../components/OfferPanel'
@@ -12,10 +12,10 @@ import type { Database } from '../types/database.types'
 
 type EventRow = Database['public']['Tables']['events']['Row']
 type EventWithStore = EventRow & { profiles: { display_name: string; slug: string | null } | null }
-type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type OfferRow = Database['public']['Tables']['event_offers']['Row'] & {
   profiles: { display_name: string; slug: string | null } | null
 }
+type OfferConditions = { pricing_type: string | null; unit_price_amount: number | null }
 
 const inputClass =
   'w-full bg-ink-2 border border-brass/50 rounded-sm px-3 py-2 text-chalk font-tl-sans focus:outline-none focus:border-dart-red transition-colors'
@@ -32,7 +32,7 @@ export function EventDetailPage() {
   const [offers, setOffers] = useState<OfferRow[]>([])
   const [myOffer, setMyOffer] = useState<OfferRow | null>(null)
   const [attendees, setAttendees] = useState<Attendee[]>([])
-  const [unitPriceByPro, setUnitPriceByPro] = useState<Record<string, string | null>>({})
+  const [offerConditionsByPro, setOfferConditionsByPro] = useState<Record<string, OfferConditions>>({})
   const [isOwner, setIsOwner] = useState(isNew)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>(isNew ? 'ready' : 'loading')
 
@@ -49,13 +49,12 @@ export function EventDetailPage() {
   const [dateError, setDateError] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<ProfileRow[]>([])
+  const [results, setResults] = useState<{ id: string; display_name: string }[]>([])
 
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false)
   const [apologyMessage, setApologyMessage] = useState(DEFAULT_APOLOGY)
-  const offerRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   async function load() {
     if (!id) return
@@ -83,7 +82,8 @@ export function EventDetailPage() {
     if (en.minute) setEndMinute(en.minute)
 
     const { data: { user } } = await supabase.auth.getUser()
-    setIsOwner(user?.id === eventData.store_id)
+    const ownerNow = user?.id === eventData.store_id
+    setIsOwner(ownerNow)
 
     const { data: offersData } = await supabase
       .from('event_offers')
@@ -102,15 +102,20 @@ export function EventDetailPage() {
 
     const proIds = (offersData ?? []).map((o) => o.pro_id)
     if (proIds.length > 0) {
-      const { data: conditionsData } = await supabase.from('pro_offer_conditions').select('pro_id, unit_price').in('pro_id', proIds)
-      setUnitPriceByPro(Object.fromEntries((conditionsData ?? []).map((c) => [c.pro_id, c.unit_price])))
+      const { data: conditionsData } = await supabase
+        .from('pro_offer_conditions')
+        .select('pro_id, pricing_type, unit_price_amount')
+        .in('pro_id', proIds)
+      setOfferConditionsByPro(
+        Object.fromEntries((conditionsData ?? []).map((c) => [c.pro_id, { pricing_type: c.pricing_type, unit_price_amount: c.unit_price_amount }]))
+      )
     }
 
     // 参加予定者(確定・キャンセル待ち)は、公開/終了済みイベントであれば
     // 誰でも見られる(RLS側も同じ条件で許可している)。
     const { data: attendeesData } = await supabase
       .from('reservations')
-      .select('user_id, status, profiles(display_name, avatar_url, is_pro, slug)')
+      .select('user_id, status, profiles(display_name, avatar_url, slug, players(is_pro))')
       .eq('event_id', id)
       .in('status', ['confirmed', 'waitlisted'])
 
@@ -120,7 +125,7 @@ export function EventDetailPage() {
         id: a.user_id,
         displayName: a.profiles!.display_name,
         avatarUrl: a.profiles!.avatar_url,
-        isPro: a.profiles!.is_pro,
+        isPro: a.profiles!.players?.is_pro ?? false,
         slug: a.profiles!.slug,
         reservationStatus: a.status as 'confirmed' | 'waitlisted',
       }))
@@ -141,9 +146,9 @@ export function EventDetailPage() {
     const timer = setTimeout(async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, display_name, players!inner(is_pro)')
         .eq('role', 'player')
-        .eq('is_pro', true)
+        .eq('players.is_pro', true)
         .ilike('display_name', `%${query}%`)
         .limit(5)
       const alreadyListed = new Set(offers.map((o) => o.pro_id))
@@ -215,9 +220,6 @@ export function EventDetailPage() {
     setQuery('')
     setResults([])
     await load()
-    requestAnimationFrame(() => {
-      offerRefs.current[candidate.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
   }
 
   async function withdrawOffer(offer: OfferRow) {
@@ -460,19 +462,19 @@ export function EventDetailPage() {
             {offers.length > 0 && (
               <div className="space-y-2">
                 {offers.map((offer) => (
-                  <div key={offer.pro_id} ref={(el) => { offerRefs.current[offer.pro_id] = el }}>
-                    <OfferPanel
-                      offer={offer}
-                      proName={offer.profiles?.display_name ?? ''}
-                      storeId={event?.store_id ?? ''}
-                      eventStatus={event?.status ?? 'draft'}
-                      defaultUnitPrice={unitPriceByPro[offer.pro_id] ?? null}
-                      eventStartAt={event?.event_start_at ?? null}
-                      eventEndAt={event?.event_end_at ?? null}
-                      onChanged={load}
-                      onWithdraw={() => withdrawOffer(offer)}
-                    />
-                  </div>
+                  <OfferPanel
+                    key={offer.pro_id}
+                    offer={offer}
+                    proName={offer.profiles?.display_name ?? ''}
+                    storeId={event?.store_id ?? ''}
+                    eventStatus={event?.status ?? 'draft'}
+                    defaultPricingType={offerConditionsByPro[offer.pro_id]?.pricing_type ?? null}
+                    defaultUnitPriceAmount={offerConditionsByPro[offer.pro_id]?.unit_price_amount ?? null}
+                    eventStartAt={event?.event_start_at ?? null}
+                    eventEndAt={event?.event_end_at ?? null}
+                    onChanged={load}
+                    onWithdraw={() => withdrawOffer(offer)}
+                  />
                 ))}
               </div>
             )}

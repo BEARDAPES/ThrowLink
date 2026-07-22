@@ -16,12 +16,6 @@ const STATUS_LABEL: Record<string, string> = {
   withdrawn: '取り下げ済み',
 }
 
-function extractDigits(text: string | null): string {
-  if (!text) return ''
-  const match = text.match(/\d+/g)
-  return match ? match.join('') : ''
-}
-
 function formatPrice(value: unknown): string {
   return typeof value === 'number' ? `${value.toLocaleString()}円` : '未設定'
 }
@@ -32,6 +26,23 @@ function sameInstant(a: string | null, b: string | null): boolean {
   return new Date(a).getTime() === new Date(b).getTime()
 }
 
+// storeが登録している単価設定(イベント単位 or 時間単価)から、
+// このオファーにおける金額の初期提案値を計算する。
+// 時間単価の場合は、イベントの開始〜終了時間から自動算出する。
+function computeSuggestedPrice(
+  pricingType: string | null,
+  amount: number | null,
+  startIso: string | null,
+  endIso: string | null
+): string {
+  if (amount == null) return ''
+  if (pricingType === 'per_hour' && startIso && endIso) {
+    const hours = (new Date(endIso).getTime() - new Date(startIso).getTime()) / 3600000
+    if (hours > 0) return String(Math.round(amount * hours))
+  }
+  return String(amount)
+}
+
 const inputClass =
   'w-full bg-ink-2 border border-brass/50 rounded-sm px-3 py-2 text-chalk font-tl-sans text-sm focus:outline-none focus:border-dart-red transition-colors'
 
@@ -40,14 +51,26 @@ interface OfferPanelProps {
   proName: string
   storeId: string
   eventStatus: string
-  defaultUnitPrice: string | null
+  defaultPricingType: string | null
+  defaultUnitPriceAmount: number | null
   eventStartAt: string | null
   eventEndAt: string | null
   onChanged: () => void
   onWithdraw: () => void
 }
 
-export function OfferPanel({ offer, proName, storeId, eventStatus, defaultUnitPrice, eventStartAt, eventEndAt, onChanged, onWithdraw }: OfferPanelProps) {
+export function OfferPanel({
+  offer,
+  proName,
+  storeId,
+  eventStatus,
+  defaultPricingType,
+  defaultUnitPriceAmount,
+  eventStartAt,
+  eventEndAt,
+  onChanged,
+  onWithdraw,
+}: OfferPanelProps) {
   const [items, setItems] = useState<ThreadItem[]>([])
   const [chatMessage, setChatMessage] = useState('')
   const [sendingChat, setSendingChat] = useState(false)
@@ -56,9 +79,13 @@ export function OfferPanel({ offer, proName, storeId, eventStatus, defaultUnitPr
   const [changeReason, setChangeReason] = useState('')
   const [savingChange, setSavingChange] = useState(false)
 
-  const [price, setPrice] = useState(offer.proposed_price != null ? String(offer.proposed_price) : extractDigits(defaultUnitPrice))
   const startInit = splitIso(offer.participation_start_at ?? eventStartAt)
   const endInit = splitIso(offer.participation_end_at ?? eventEndAt)
+  const [price, setPrice] = useState(
+    offer.proposed_price != null
+      ? String(offer.proposed_price)
+      : computeSuggestedPrice(defaultPricingType, defaultUnitPriceAmount, eventStartAt, eventEndAt)
+  )
   const [startDate, setStartDate] = useState(startInit.date)
   const [startHour, setStartHour] = useState(startInit.hour || '19')
   const [startMinute, setStartMinute] = useState(startInit.minute || '00')

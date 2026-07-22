@@ -5,11 +5,13 @@ import { ProfileEditForm } from '../components/ProfileEditForm'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
+type PlayerRow = Database['public']['Tables']['players']['Row']
 type OfferConditions = Database['public']['Tables']['pro_offer_conditions']['Row']
 
 export function EditProfilePage() {
   const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [player, setPlayer] = useState<PlayerRow | null>(null)
   const [offerConditions, setOfferConditions] = useState<OfferConditions | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out'>('loading')
 
@@ -23,14 +25,20 @@ export function EditProfilePage() {
       }
 
       const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      const { data: offerData } = await supabase
-        .from('pro_offer_conditions')
-        .select('*')
-        .eq('pro_id', user.id)
-        .maybeSingle()
-
       if (profileData) setProfile(profileData)
-      setOfferConditions(offerData ?? null)
+
+      if (profileData?.role === 'player') {
+        const { data: playerData } = await supabase.from('players').select('*').eq('id', user.id).maybeSingle()
+        setPlayer(playerData)
+
+        const { data: offerData } = await supabase
+          .from('pro_offer_conditions')
+          .select('*')
+          .eq('pro_id', user.id)
+          .maybeSingle()
+        setOfferConditions(offerData ?? null)
+      }
+
       setStatus('ready')
     }
 
@@ -39,25 +47,32 @@ export function EditProfilePage() {
 
   async function handleSave({
     profile: profileUpdates,
+    player: playerUpdates,
     offerConditions: offerUpdates,
   }: {
     profile: Partial<Profile>
-    offerConditions: { unit_price: string; notes: string } | null
+    player: Partial<PlayerRow> | null
+    offerConditions: { pricing_type: string; unit_price_amount: number | null; notes: string } | null
   }) {
     if (!profile) return
+
     await supabase.from('profiles').update({ ...profileUpdates, onboarded: true }).eq('id', profile.id)
+
+    if (playerUpdates) {
+      await supabase.from('players').update(playerUpdates).eq('id', profile.id)
+    }
+
     if (offerUpdates) {
       await supabase.from('pro_offer_conditions').upsert({
         pro_id: profile.id,
-        unit_price: offerUpdates.unit_price,
+        pricing_type: offerUpdates.pricing_type,
+        unit_price_amount: offerUpdates.unit_price_amount,
         notes: offerUpdates.notes,
       })
     }
-    navigate(
-      profile.role === 'store'
-        ? `/stores/${profileUpdates.slug ?? profile.slug}`
-        : `/players/${profileUpdates.slug ?? profile.slug}`
-    )
+
+    const finalSlug = profileUpdates.slug ?? profile.slug
+    navigate(profile.role === 'store' ? `/stores/${finalSlug}` : `/players/${finalSlug}`)
   }
 
   if (status === 'loading') return null
@@ -67,5 +82,12 @@ export function EditProfilePage() {
   }
   if (!profile) return null
 
-  return <ProfileEditForm profile={profile} offerConditions={offerConditions} onSave={handleSave} />
+  return (
+    <ProfileEditForm
+      profile={profile}
+      player={player}
+      offerConditions={offerConditions}
+      onSave={handleSave}
+    />
+  )
 }

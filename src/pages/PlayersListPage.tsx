@@ -4,15 +4,16 @@ import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
+type PlayerListItem = Profile & { players: { is_pro: boolean } | null }
 
 export function PlayersListPage() {
-  const [players, setPlayers] = useState<Profile[] | null>(null)
+  const [players, setPlayers] = useState<PlayerListItem[] | null>(null)
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, players(is_pro)')
         .eq('role', 'player')
         .eq('onboarded', true)
         .not('slug', 'is', null)
@@ -56,7 +57,7 @@ export function PlayersListPage() {
                     <span className="block text-xs text-chalk-dim font-tl-mono">{player.location}</span>
                   )}
                 </span>
-                {player.is_pro && (
+                {player.players?.is_pro && (
                   <span className="font-tl-mono text-[10px] font-semibold tracking-widest text-ink bg-dart-red px-1.5 py-0.5 rounded-sm shrink-0">
                     PRO
                   </span>

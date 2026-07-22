@@ -14,6 +14,11 @@ export function OnboardingPage() {
       return
     }
     await supabase.from('profiles').update({ role }).eq('id', user.id)
+    if (role === 'player') {
+      await supabase.from('players').insert({ id: user.id })
+    } else {
+      await supabase.from('stores').insert({ id: user.id })
+    }
     navigate('/me/edit')
   }
 

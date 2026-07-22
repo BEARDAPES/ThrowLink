@@ -4,6 +4,7 @@ import { EventListSection, type EventListItem } from './EventListSection'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
+type PlayerRow = Database['public']['Tables']['players']['Row']
 
 interface ProStats {
   request_count: number
@@ -13,6 +14,7 @@ interface ProStats {
 
 interface PlayerProfileCardProps {
   profile: Profile
+  player: PlayerRow | null
   stats: ProStats
   events: EventListItem[]
   myUpcomingEvents: EventListItem[]
@@ -73,9 +75,10 @@ const DART_RING = `conic-gradient(
 const footerLinkClass =
   'font-tl-mono text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-chalk transition-colors'
 
-export function PlayerProfileCard({ profile, stats, events, myUpcomingEvents, isOwner, onSignOut }: PlayerProfileCardProps) {
+export function PlayerProfileCard({ profile, player, stats, events, myUpcomingEvents, isOwner, onSignOut }: PlayerProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
+  const isPro = player?.is_pro ?? false
 
   const links = [
     ...snsLinks.map((link) => ({
@@ -84,14 +87,14 @@ export function PlayerProfileCard({ profile, stats, events, myUpcomingEvents, is
       label: SNS_LABELS[link.platform] ?? link.platform,
       icon: SNS_ICONS[link.platform] ?? null,
     })),
-    ...(profile.is_pro && profile.player_directory_url
+    ...(isPro && player?.player_directory_url
       ? [
           {
             key: 'directory',
-            href: profile.player_directory_url,
-            label: directoryLabel(profile.player_directory_url),
+            href: player.player_directory_url,
+            label: directoryLabel(player.player_directory_url),
             icon: (
-              <img src={faviconUrl(profile.player_directory_url)} alt="" className="w-full h-full object-contain" />
+              <img src={faviconUrl(player.player_directory_url)} alt="" className="w-full h-full object-contain" />
             ),
           },
         ]
@@ -124,7 +127,7 @@ export function PlayerProfileCard({ profile, stats, events, myUpcomingEvents, is
           </h1>
 
           <div className="mt-2 flex items-center gap-2">
-            {profile.is_pro && (
+            {isPro && (
               <span className="font-tl-mono text-[11px] font-semibold tracking-widest text-ink bg-dart-red px-2 py-0.5 rounded-sm">
                 PRO
               </span>
@@ -137,8 +140,8 @@ export function PlayerProfileCard({ profile, stats, events, myUpcomingEvents, is
           </div>
         </header>
 
-        <div className={`grid ${profile.is_pro ? 'grid-cols-3' : 'grid-cols-1'} border-t border-b border-brass py-6 mb-10`}>
-          {profile.is_pro && (
+        <div className={`grid ${isPro ? 'grid-cols-3' : 'grid-cols-1'} border-t border-b border-brass py-6 mb-10`}>
+          {isPro && (
             <>
               <div className="text-center">
                 <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
@@ -154,7 +157,7 @@ export function PlayerProfileCard({ profile, stats, events, myUpcomingEvents, is
               </div>
             </>
           )}
-          <div className={`text-center ${profile.is_pro ? 'border-l border-brass/35' : ''}`}>
+          <div className={`text-center ${isPro ? 'border-l border-brass/35' : ''}`}>
             <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
               {stats.participation_count}
             </div>
@@ -177,7 +180,7 @@ export function PlayerProfileCard({ profile, stats, events, myUpcomingEvents, is
           </p>
         )}
 
-        {profile.is_pro && <EventListSection events={events} />}
+        {isPro && <EventListSection events={events} />}
 
         {isOwner && myUpcomingEvents.length > 0 && (
           <div className="mb-10">
@@ -208,7 +211,7 @@ export function PlayerProfileCard({ profile, stats, events, myUpcomingEvents, is
 
         {isOwner ? (
           <div className="mt-4 pt-6 border-t border-brass/35 text-center">
-            {profile.is_pro && (
+            {isPro && (
               <>
                 <Link to="/me/offers" className={footerLinkClass}>
                   オファー一覧
