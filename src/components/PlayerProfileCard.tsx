@@ -1,21 +1,17 @@
 import { Link } from 'react-router'
 import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
 import { EventListSection, type EventListItem } from './EventListSection'
+import { getDartsLiveInfo, getPhoenixInfo, DARTSLIVE_COLORS } from '../lib/ratings'
+import { PRO_ONLY_STATUS_TAGS } from '../lib/statusTags'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type PlayerRow = Database['public']['Tables']['players']['Row']
-
-interface ProStats {
-  request_count: number
-  total_mobilized: number
-  participation_count: number
-}
+type PlayerWithHomeShop = PlayerRow & { home_shop: { display_name: string; slug: string | null } | null }
 
 interface PlayerProfileCardProps {
   profile: Profile
-  player: PlayerRow | null
-  stats: ProStats
+  player: PlayerWithHomeShop | null
   events: EventListItem[]
   myUpcomingEvents: EventListItem[]
   isOwner?: boolean
@@ -30,7 +26,6 @@ const SNS_ICONS: Record<string, React.ReactNode> = {
   youtube: <FaYoutube />,
   tiktok: <FaTiktok />,
 }
-
 const SNS_LABELS: Record<string, string> = {
   x: 'X',
   instagram: 'Instagram',
@@ -61,6 +56,12 @@ function faviconUrl(url: string): string {
   }
 }
 
+function formatShortDateWithWeekday(iso: string): string {
+  const d = new Date(iso)
+  const weekday = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
+  return `${d.getMonth() + 1}/${d.getDate()}(${weekday})`
+}
+
 const DART_RING = `conic-gradient(
   var(--color-cream) 0deg 22.5deg, var(--color-ink-2) 22.5deg 45deg,
   var(--color-cream) 45deg 67.5deg, var(--color-ink-2) 67.5deg 90deg,
@@ -75,10 +76,20 @@ const DART_RING = `conic-gradient(
 const footerLinkClass =
   'font-tl-mono text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-chalk transition-colors'
 
-export function PlayerProfileCard({ profile, player, stats, events, myUpcomingEvents, isOwner, onSignOut }: PlayerProfileCardProps) {
+export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, isOwner, onSignOut }: PlayerProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
   const isPro = player?.is_pro ?? false
+
+  const nextEvent = [...events]
+    .filter((e) => e.status === 'published')
+    .sort((a, b) => new Date(a.startAt ?? 0).getTime() - new Date(b.startAt ?? 0).getTime())[0]
+
+  const dlInfo = player?.darts_live_rating ? getDartsLiveInfo(player.darts_live_rating) : null
+  const phxInfo = player?.phoenix_rating ? getPhoenixInfo(player.phoenix_rating) : null
+  const hasRatingRow = dlInfo || phxInfo
+  const achievements = Array.isArray(player?.achievements) ? (player.achievements as string[]) : []
+  const statusTags = Array.isArray(player?.status_tags) ? (player.status_tags as string[]) : []
 
   const links = [
     ...snsLinks.map((link) => ({
@@ -93,9 +104,7 @@ export function PlayerProfileCard({ profile, player, stats, events, myUpcomingEv
             key: 'directory',
             href: player.player_directory_url,
             label: directoryLabel(player.player_directory_url),
-            icon: (
-              <img src={faviconUrl(player.player_directory_url)} alt="" className="w-full h-full object-contain" />
-            ),
+            icon: <img src={faviconUrl(player.player_directory_url)} alt="" className="w-full h-full object-contain" />,
           },
         ]
       : []),
@@ -104,87 +113,191 @@ export function PlayerProfileCard({ profile, player, stats, events, myUpcomingEv
   return (
     <div className="min-h-screen bg-ink font-tl-sans flex justify-center px-6 py-16 sm:py-24">
       <div className="w-full max-w-[560px] animate-tl-rise text-left">
-        <header className="flex flex-col items-center text-center mb-12">
+        <div className="flex justify-end items-center gap-2 mb-5">
+          <span className="flex items-center gap-1.5 h-8 px-2.5 border border-brass/40 rounded-sm text-chalk-dim font-tl-mono text-xs leading-none">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            0
+          </span>
+          <span className="flex items-center gap-1.5 h-8 px-2.5 border border-brass/40 rounded-sm text-chalk-dim font-tl-mono text-xs leading-none">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            0
+          </span>
+          {isOwner && (
+            <Link
+              to="/me/edit"
+              title="編集する"
+              className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </Link>
+          )}
+        </div>
+
+        <div className="flex gap-4 items-start mb-7">
           <div
-            className="w-[132px] h-[132px] rounded-full p-1.5 border-2 border-brass flex items-center justify-center mb-5"
+            className="w-[110px] h-[104px] rounded-full p-1 border-2 border-brass flex items-center justify-center shrink-0"
             style={{ background: DART_RING }}
           >
             {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt=""
-                className="w-full h-full rounded-full object-cover border-[3px] border-dart-red"
-              />
+              <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover border-2 border-dart-red" />
             ) : (
-              <div className="w-full h-full rounded-full border-[3px] border-dart-red bg-ink-2 flex items-center justify-center font-display text-3xl font-semibold text-chalk">
+              <div className="w-full h-full rounded-full border-2 border-dart-red bg-ink-2 flex items-center justify-center font-display text-2xl font-semibold text-chalk leading-none">
                 {initials}
               </div>
             )}
           </div>
 
-          <h1 className="font-display text-3xl sm:text-4xl font-bold uppercase tracking-wide text-chalk">
-            {profile.display_name}
-          </h1>
+          <div className="flex-1 min-w-0 pt-1">
+            <h1 className="font-display text-2xl sm:text-[26px] font-bold uppercase tracking-wide text-chalk leading-[1.1]">
+              {profile.display_name}
+            </h1>
 
-          <div className="mt-2 flex items-center gap-2">
-            {isPro && (
-              <span className="font-tl-mono text-[11px] font-semibold tracking-widest text-ink bg-dart-red px-2 py-0.5 rounded-sm">
-                PRO
-              </span>
-            )}
-            {profile.location && (
-              <span className="font-tl-mono text-[13px] text-chalk-dim tracking-wide">
-                {profile.location}
-              </span>
-            )}
-          </div>
-        </header>
-
-        <div className={`grid ${isPro ? 'grid-cols-3' : 'grid-cols-1'} border-t border-b border-brass py-6 mb-10`}>
-          {isPro && (
-            <>
-              <div className="text-center">
-                <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
-                  {stats.request_count}
-                </div>
-                <div className="mt-1 text-xs text-chalk-dim tracking-wide">被依頼回数</div>
-              </div>
-              <div className="text-center border-l border-brass/35">
-                <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
-                  {stats.total_mobilized}
-                </div>
-                <div className="mt-1 text-xs text-chalk-dim tracking-wide">延べ動員数</div>
-              </div>
-            </>
-          )}
-          <div className={`text-center ${isPro ? 'border-l border-brass/35' : ''}`}>
-            <div className="font-tl-mono text-4xl font-semibold text-chalk tabular-nums">
-              {stats.participation_count}
+            <div className="flex items-center flex-wrap gap-1.5 mt-2">
+              {isPro && (
+                <span className="font-tl-mono text-[10px] font-semibold tracking-widest text-ink bg-dart-red px-1.5 py-0.5 rounded-sm leading-none">
+                  PRO
+                </span>
+              )}
+              {profile.location && <span className="font-tl-mono text-xs text-chalk-dim leading-none">{profile.location}</span>}
+              {isPro && (
+                <span className="font-tl-mono text-[11px] text-chalk border border-brass rounded-sm px-2 py-0.5 inline-flex items-center gap-1.5 leading-none">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: nextEvent ? '#3B6B4E' : '#B7AF9C' }} />
+                  次の出演: {nextEvent?.startAt ? formatShortDateWithWeekday(nextEvent.startAt) : '未定'}
+                </span>
+              )}
             </div>
-            {isOwner ? (
-              <Link
-                to="/me/events"
-                className="mt-1 inline-block text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-dart-red transition-colors"
-              >
-                イベント参加数
-              </Link>
-            ) : (
-              <div className="mt-1 text-xs text-chalk-dim tracking-wide">イベント参加数</div>
+
+            {statusTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {statusTags.map((tag) => {
+                  const isProTag = (PRO_ONLY_STATUS_TAGS as readonly string[]).includes(tag)
+                  return (
+                    <span
+                      key={tag}
+                      className={`font-tl-mono text-[10px] rounded-full px-2.5 py-0.5 border leading-none ${
+                        isProTag ? 'border-dart-red text-chalk' : 'border-brass/50 text-chalk-dim'
+                      }`}
+                    >
+                      {tag}
+                    </span>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
 
+        {(player?.home_shop || player?.home_shop_text || player?.sake_rating != null || hasRatingRow || player?.years_playing != null || player?.dart_setup || achievements.length > 0) && (
+          <div className="space-y-3.5 mb-7">
+            {(player?.home_shop || player?.home_shop_text) && (
+              <div>
+                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">ホームショップ</div>
+                {player?.home_shop ? (
+                  <Link
+                    to={`/stores/${player.home_shop.slug}`}
+                    className="text-[13px] text-chalk underline decoration-brass/50 underline-offset-4 hover:text-dart-red transition-colors"
+                  >
+                    {player.home_shop.display_name}
+                  </Link>
+                ) : (
+                  <div className="text-[13px] text-chalk">{player?.home_shop_text}</div>
+                )}
+              </div>
+            )}
+
+            {player?.sake_rating != null && (
+              <div>
+                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">酒レーティング</div>
+                <div className="flex items-center gap-[3px] flex-wrap">
+                  {Array.from({ length: 18 }, (_, i) => (
+                    <span
+                      key={i}
+                      className="w-[11px] h-[11px] rounded-sm"
+                      style={{
+                        background: i < player.sake_rating! ? DARTSLIVE_COLORS[i] : 'transparent',
+                        border: i < player.sake_rating! ? 'none' : '1px solid rgba(176,141,70,0.3)',
+                      }}
+                    />
+                  ))}
+                  <span className="ml-2 font-tl-mono text-xs text-chalk">{player.sake_rating} / 18</span>
+                </div>
+              </div>
+            )}
+
+            {hasRatingRow && (
+              <div>
+                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">レーティング</div>
+                <div className="flex flex-wrap gap-2">
+                  {dlInfo && (
+                    <span
+                      className="font-tl-mono text-[11px] font-semibold px-2.5 py-1 rounded-sm leading-none"
+                      style={{ background: dlInfo.color, color: '#1A1200' }}
+                    >
+                      DARTSLIVE {player!.darts_live_rating} ・ {dlInfo.flight}
+                    </span>
+                  )}
+                  {phxInfo && (
+                    <span
+                      className="font-tl-mono text-[11px] font-semibold px-2.5 py-1 rounded-sm leading-none"
+                      style={{ background: phxInfo.color, color: '#1A1200' }}
+                    >
+                      PHOENIX {player!.phoenix_rating} ・ {phxInfo.flight}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {player?.years_playing != null && (
+              <div>
+                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">ダーツ歴</div>
+                <div className="text-[13px] text-chalk">{player.years_playing}年</div>
+              </div>
+            )}
+
+            {player?.dart_setup && (
+              <div>
+                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">使用セッティング</div>
+                <div className="text-[13px] text-chalk">{player.dart_setup}</div>
+              </div>
+            )}
+
+            {achievements.length > 0 && (
+              <div>
+                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">実績</div>
+                <ul className="list-none">
+                  {achievements.map((a, i) => (
+                    <li key={i} className="relative text-[13px] text-chalk py-0.5 pl-3.5">
+                      <span className="absolute left-0 top-[9px] w-[5px] h-[5px] rounded-full bg-brass" />
+                      {a}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         {profile.bio_text && (
-          <p className="text-[15px] leading-loose text-chalk mb-10">
-            {profile.bio_text}
-          </p>
+          <div className="mb-10 pb-8 border-b border-brass/35">
+            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-2.5 leading-none">自己紹介</p>
+            <p className="text-[15px] leading-loose text-chalk">{profile.bio_text}</p>
+          </div>
         )}
 
         {isPro && <EventListSection events={events} />}
 
         {isOwner && myUpcomingEvents.length > 0 && (
           <div className="mb-10">
-            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">参加予定のイベント</p>
+            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3 leading-none">参加予定のイベント</p>
             <EventListSection events={myUpcomingEvents} />
           </div>
         )}
@@ -219,10 +332,6 @@ export function PlayerProfileCard({ profile, player, stats, events, myUpcomingEv
                 <span className="mx-3 text-brass/50">・</span>
               </>
             )}
-            <Link to="/me/edit" className={footerLinkClass}>
-              編集する
-            </Link>
-            <span className="mx-3 text-brass/50">・</span>
             <button type="button" onClick={onSignOut} className={footerLinkClass}>
               サインアウト
             </button>

@@ -7,13 +7,18 @@ import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type PlayerRow = Database['public']['Tables']['players']['Row']
+type PlayerWithHomeShop = PlayerRow & { home_shop: { display_name: string; slug: string | null } | null }
+
+function buildVenue(store: { display_name: string; location: string | null } | null): string | undefined {
+  if (!store) return undefined
+  return [store.display_name, store.location].filter(Boolean).join(' ・ ')
+}
 
 export function PlayerProfilePage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [player, setPlayer] = useState<PlayerRow | null>(null)
-  const [stats, setStats] = useState({ request_count: 0, total_mobilized: 0, participation_count: 0 })
+  const [player, setPlayer] = useState<PlayerWithHomeShop | null>(null)
   const [events, setEvents] = useState<EventListItem[]>([])
   const [myUpcomingEvents, setMyUpcomingEvents] = useState<EventListItem[]>([])
   const [isOwner, setIsOwner] = useState(false)
@@ -38,53 +43,68 @@ export function PlayerProfilePage() {
 
       setProfile(profileData)
 
-      const { data: playerData } = await supabase
+      const { data: playerData, error: playerError } = await supabase
         .from('players')
         .select('*')
         .eq('id', profileData.id)
         .maybeSingle()
-      setPlayer(playerData)
+
+      if (playerError) console.error('players fetch error:', playerError)
+
+      let playerWithShop: PlayerWithHomeShop | null = playerData ? { ...playerData, home_shop: null } : null
+
+      if (playerData?.home_shop_id) {
+        const { data: shopData } = await supabase
+          .from('profiles')
+          .select('display_name, slug')
+          .eq('id', playerData.home_shop_id)
+          .maybeSingle()
+        if (playerWithShop) playerWithShop.home_shop = shopData ?? null
+      }
+
+      setPlayer(playerWithShop)
 
       const { data: { user } } = await supabase.auth.getUser()
       const isOwnerNow = user?.id === profileData.id
       setIsOwner(isOwnerNow)
 
-      const [{ data: proStatsData }, { data: fanStatsData }] = await Promise.all([
-        supabase.rpc('pro_stats', { target_pro_id: profileData.id }),
-        supabase.rpc('fan_stats', { target_user_id: profileData.id }),
-      ])
-
-      setStats({
-        request_count: proStatsData?.[0]?.request_count ?? 0,
-        total_mobilized: proStatsData?.[0]?.total_mobilized ?? 0,
-        participation_count: fanStatsData?.[0]?.participation_count ?? 0,
-      })
-
       if (playerData?.is_pro) {
         const { data: offersData } = await supabase
           .from('event_offers')
-          .select('events(id, event_title, event_start_at, status)')
+          .select('events(id, event_title, event_start_at, status, profiles!events_store_id_fkey(display_name, location))')
           .eq('pro_id', profileData.id)
           .eq('offer_status', 'accepted')
 
         const items: EventListItem[] = (offersData ?? [])
           .map((o) => o.events)
           .filter((e): e is NonNullable<typeof e> => !!e && (e.status === 'published' || e.status === 'completed'))
-          .map((e) => ({ id: e.id, title: e.event_title, startAt: e.event_start_at, status: e.status }))
+          .map((e) => ({
+            id: e.id,
+            title: e.event_title,
+            startAt: e.event_start_at,
+            status: e.status,
+            venue: buildVenue(e.profiles),
+          }))
         setEvents(items)
       }
 
       if (isOwnerNow) {
         const { data: reservationsData } = await supabase
           .from('reservations')
-          .select('events(id, event_title, event_start_at, status)')
+          .select('events(id, event_title, event_start_at, status, profiles!events_store_id_fkey(display_name, location))')
           .eq('user_id', profileData.id)
           .in('status', ['confirmed', 'waitlisted'])
 
         const upcoming: EventListItem[] = (reservationsData ?? [])
           .map((r) => r.events)
           .filter((e): e is NonNullable<typeof e> => !!e && e.status === 'published')
-          .map((e) => ({ id: e.id, title: e.event_title, startAt: e.event_start_at, status: e.status }))
+          .map((e) => ({
+            id: e.id,
+            title: e.event_title,
+            startAt: e.event_start_at,
+            status: e.status,
+            venue: buildVenue(e.profiles),
+          }))
         setMyUpcomingEvents(upcoming)
       }
 
@@ -113,7 +133,6 @@ export function PlayerProfilePage() {
     <PlayerProfileCard
       profile={profile}
       player={player}
-      stats={stats}
       events={events}
       myUpcomingEvents={myUpcomingEvents}
       isOwner={isOwner}
