@@ -77,7 +77,7 @@ export function ProfileEditForm({ profile, player, offerConditions, onSave }: Pr
   const [displayName, setDisplayName] = useState(profile.display_name)
   const [slug, setSlug] = useState(profile.slug ?? '')
   const [bioText, setBioText] = useState(profile.bio_text ?? '')
-  const [location, setLocation] = useState(profile.location ?? '')
+  const [location, setLocation] = useState(player?.location ?? '')
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? '')
   const [directoryUrl, setDirectoryUrl] = useState(player?.player_directory_url ?? '')
   const [isPro, setIsPro] = useState(player?.is_pro ?? false)
@@ -214,13 +214,13 @@ export function ProfileEditForm({ profile, player, offerConditions, onSave }: Pr
         display_name: displayName,
         slug: slugLocked ? profile.slug : slug,
         bio_text: bioText || null,
-        location: location || null,
         avatar_url: avatarUrl || null,
         sns_links: isPlayerAccount ? snsLinks : profile.sns_links,
       },
       player: isPlayerAccount
         ? {
             is_pro: isPro,
+            location: location || null,
             player_directory_url: isPro ? directoryUrl || null : null,
             home_shop_id: homeShopFreeMode ? null : homeShopId,
             home_shop_text: homeShopFreeMode ? homeShopText || null : null,
@@ -278,12 +278,12 @@ export function ProfileEditForm({ profile, player, offerConditions, onSave }: Pr
             )}
           </div>
 
-          <div>
-            <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">
-              {isPlayerAccount ? '活動拠点' : '所在地・エリア'}
-            </label>
-            <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass} />
-          </div>
+          {isPlayerAccount && (
+            <div>
+              <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">活動拠点</label>
+              <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass} />
+            </div>
+          )}
 
           <div>
             <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1.5">

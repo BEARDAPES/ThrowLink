@@ -241,6 +241,7 @@ export type Database = {
           home_shop_text: string | null
           id: string
           is_pro: boolean
+          location: string | null
           phoenix_rating: number | null
           player_directory_url: string | null
           sake_rating: number | null
@@ -255,6 +256,7 @@ export type Database = {
           home_shop_text?: string | null
           id: string
           is_pro?: boolean
+          location?: string | null
           phoenix_rating?: number | null
           player_directory_url?: string | null
           sake_rating?: number | null
@@ -269,6 +271,7 @@ export type Database = {
           home_shop_text?: string | null
           id?: string
           is_pro?: boolean
+          location?: string | null
           phoenix_rating?: number | null
           player_directory_url?: string | null
           sake_rating?: number | null
@@ -368,7 +371,6 @@ export type Database = {
           display_name: string
           has_password_login: boolean
           id: string
-          location: string | null
           onboarded: boolean
           role: string
           slug: string | null
@@ -382,7 +384,6 @@ export type Database = {
           display_name?: string
           has_password_login?: boolean
           id: string
-          location?: string | null
           onboarded?: boolean
           role?: string
           slug?: string | null
@@ -396,7 +397,6 @@ export type Database = {
           display_name?: string
           has_password_login?: boolean
           id?: string
-          location?: string | null
           onboarded?: boolean
           role?: string
           slug?: string | null
@@ -446,13 +446,40 @@ export type Database = {
       }
       stores: {
         Row: {
+          address: string | null
+          atmosphere_tags: Json
+          business_close_time: string | null
+          business_open_time: string | null
+          dartslive_shop_url: string | null
           id: string
+          parking_available: boolean | null
+          phoenix_shop_url: string | null
+          phone_number: string | null
+          smoking_allowed: boolean | null
         }
         Insert: {
+          address?: string | null
+          atmosphere_tags?: Json
+          business_close_time?: string | null
+          business_open_time?: string | null
+          dartslive_shop_url?: string | null
           id: string
+          parking_available?: boolean | null
+          phoenix_shop_url?: string | null
+          phone_number?: string | null
+          smoking_allowed?: boolean | null
         }
         Update: {
+          address?: string | null
+          atmosphere_tags?: Json
+          business_close_time?: string | null
+          business_open_time?: string | null
+          dartslive_shop_url?: string | null
           id?: string
+          parking_available?: boolean | null
+          phoenix_shop_url?: string | null
+          phone_number?: string | null
+          smoking_allowed?: boolean | null
         }
         Relationships: [
           {

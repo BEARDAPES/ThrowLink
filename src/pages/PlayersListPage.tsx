@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
-type PlayerListItem = Profile & { players: { is_pro: boolean } | null }
+type PlayerListItem = Profile & { players: { is_pro: boolean; location: string | null } | null }
 
 export function PlayersListPage() {
   const [players, setPlayers] = useState<PlayerListItem[] | null>(null)
@@ -13,7 +13,7 @@ export function PlayersListPage() {
     async function load() {
       const { data } = await supabase
         .from('profiles')
-        .select('*, players(is_pro)')
+        .select('*, players(is_pro, location)')
         .eq('role', 'player')
         .eq('onboarded', true)
         .not('slug', 'is', null)
@@ -53,8 +53,8 @@ export function PlayersListPage() {
                   <span className="block text-chalk text-sm group-hover:text-dart-red transition-colors truncate">
                     {player.display_name}
                   </span>
-                  {player.location && (
-                    <span className="block text-xs text-chalk-dim font-tl-mono">{player.location}</span>
+                  {player.players?.location && (
+                    <span className="block text-xs text-chalk-dim font-tl-mono">{player.players.location}</span>
                   )}
                 </span>
                 {player.players?.is_pro && (

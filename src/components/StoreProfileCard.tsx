@@ -86,11 +86,6 @@ export function StoreProfileCard({ profile, events, isOwner, onSignOut }: StoreP
             <span className="font-tl-mono text-[11px] font-semibold tracking-widest text-ink bg-brass px-2 py-0.5 rounded-sm">
               STORE
             </span>
-            {profile.location && (
-              <span className="font-tl-mono text-[13px] text-chalk-dim tracking-wide">
-                {profile.location}
-              </span>
-            )}
           </div>
         </header>
 

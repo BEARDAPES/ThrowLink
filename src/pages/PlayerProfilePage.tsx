@@ -9,9 +9,9 @@ type Profile = Database['public']['Tables']['profiles']['Row']
 type PlayerRow = Database['public']['Tables']['players']['Row']
 type PlayerWithHomeShop = PlayerRow & { home_shop: { display_name: string; slug: string | null } | null }
 
-function buildVenue(store: { display_name: string; location: string | null } | null): string | undefined {
+function buildVenue(store: { display_name: string; stores: { address: string | null } | null } | null): string | undefined {
   if (!store) return undefined
-  return [store.display_name, store.location].filter(Boolean).join(' ・ ')
+  return [store.display_name, store.stores?.address].filter(Boolean).join(' ・ ')
 }
 
 export function PlayerProfilePage() {
@@ -71,7 +71,7 @@ export function PlayerProfilePage() {
       if (playerData?.is_pro) {
         const { data: offersData } = await supabase
           .from('event_offers')
-          .select('events(id, event_title, event_start_at, status, profiles!events_store_id_fkey(display_name, location))')
+          .select('events(id, event_title, event_start_at, status, profiles!events_store_id_fkey(display_name, stores(address)))')
           .eq('pro_id', profileData.id)
           .eq('offer_status', 'accepted')
 
@@ -91,7 +91,7 @@ export function PlayerProfilePage() {
       if (isOwnerNow) {
         const { data: reservationsData } = await supabase
           .from('reservations')
-          .select('events(id, event_title, event_start_at, status, profiles!events_store_id_fkey(display_name, location))')
+          .select('events(id, event_title, event_start_at, status, profiles!events_store_id_fkey(display_name, stores(address)))')
           .eq('user_id', profileData.id)
           .in('status', ['confirmed', 'waitlisted'])
 

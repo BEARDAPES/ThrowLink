@@ -143,7 +143,7 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, i
                   PRO
                 </span>
               )}
-              {profile.location && <span className="font-tl-mono text-xs text-chalk-dim leading-none">{profile.location}</span>}
+              {player?.location && <span className="font-tl-mono text-xs text-chalk-dim leading-none">{player.location}</span>}
               {isPro && (
                 <span className="font-tl-mono text-[11px] text-chalk border border-brass rounded-sm px-2 py-0.5 inline-flex items-center gap-1.5 leading-none">
                   <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: nextEvent ? '#3B6B4E' : '#B7AF9C' }} />

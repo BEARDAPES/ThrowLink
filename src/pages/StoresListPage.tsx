@@ -52,9 +52,6 @@ export function StoresListPage() {
                   <span className="block text-chalk text-sm group-hover:text-dart-red transition-colors truncate">
                     {store.display_name}
                   </span>
-                  {store.location && (
-                    <span className="block text-xs text-chalk-dim font-tl-mono">{store.location}</span>
-                  )}
                 </span>
               </Link>
             ))}
