@@ -6,12 +6,14 @@ import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type PlayerRow = Database['public']['Tables']['players']['Row']
+type StoreRow = Database['public']['Tables']['stores']['Row']
 type OfferConditions = Database['public']['Tables']['pro_offer_conditions']['Row']
 
 export function EditProfilePage() {
   const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [player, setPlayer] = useState<PlayerRow | null>(null)
+  const [store, setStore] = useState<StoreRow | null>(null)
   const [offerConditions, setOfferConditions] = useState<OfferConditions | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out'>('loading')
 
@@ -39,6 +41,11 @@ export function EditProfilePage() {
         setOfferConditions(offerData ?? null)
       }
 
+      if (profileData?.role === 'store') {
+        const { data: storeData } = await supabase.from('stores').select('*').eq('id', user.id).maybeSingle()
+        setStore(storeData)
+      }
+
       setStatus('ready')
     }
 
@@ -48,10 +55,12 @@ export function EditProfilePage() {
   async function handleSave({
     profile: profileUpdates,
     player: playerUpdates,
+    store: storeUpdates,
     offerConditions: offerUpdates,
   }: {
     profile: Partial<Profile>
     player: Partial<PlayerRow> | null
+    store: Partial<StoreRow> | null
     offerConditions: { pricing_type: string; unit_price_amount: number | null; notes: string } | null
   }) {
     if (!profile) return
@@ -60,6 +69,10 @@ export function EditProfilePage() {
 
     if (playerUpdates) {
       await supabase.from('players').update(playerUpdates).eq('id', profile.id)
+    }
+
+    if (storeUpdates) {
+      await supabase.from('stores').update(storeUpdates).eq('id', profile.id)
     }
 
     if (offerUpdates) {
@@ -86,6 +99,7 @@ export function EditProfilePage() {
     <ProfileEditForm
       profile={profile}
       player={player}
+      store={store}
       offerConditions={offerConditions}
       onSave={handleSave}
     />

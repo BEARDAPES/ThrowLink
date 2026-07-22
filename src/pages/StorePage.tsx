@@ -6,11 +6,13 @@ import type { EventListItem } from '../components/EventListSection'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
+type StoreRow = Database['public']['Tables']['stores']['Row']
 
 export function StorePage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [store, setStore] = useState<StoreRow | null>(null)
   const [events, setEvents] = useState<EventListItem[]>([])
   const [isOwner, setIsOwner] = useState(false)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>('loading')
@@ -34,6 +36,13 @@ export function StorePage() {
       }
 
       setProfile(profileData)
+
+      const { data: storeData } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('id', profileData.id)
+        .maybeSingle()
+      setStore(storeData)
 
       const { data: { user } } = await supabase.auth.getUser()
       setIsOwner(user?.id === profileData.id)
@@ -69,5 +78,5 @@ export function StorePage() {
     )
   }
 
-  return <StoreProfileCard profile={profile} events={events} isOwner={isOwner} onSignOut={handleSignOut} />
+  return <StoreProfileCard profile={profile} store={store} events={events} isOwner={isOwner} onSignOut={handleSignOut} />
 }
