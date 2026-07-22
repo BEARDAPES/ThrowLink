@@ -3,6 +3,7 @@ import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
 import { EventListSection, type EventListItem } from './EventListSection'
 import { getDartsLiveInfo, getPhoenixInfo, DARTSLIVE_COLORS } from '../lib/ratings'
 import { PRO_ONLY_STATUS_TAGS } from '../lib/statusTags'
+import { StarWatchButtons } from './StarWatchButtons'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -114,31 +115,7 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, i
     <div className="min-h-screen bg-ink font-tl-sans flex justify-center px-6 py-16 sm:py-24">
       <div className="w-full max-w-[560px] animate-tl-rise text-left">
         <div className="flex justify-end items-center gap-2 mb-5">
-          <span className="flex items-center gap-1.5 h-8 px-2.5 border border-brass/40 rounded-sm text-chalk-dim font-tl-mono text-xs leading-none">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-            0
-          </span>
-          <span className="flex items-center gap-1.5 h-8 px-2.5 border border-brass/40 rounded-sm text-chalk-dim font-tl-mono text-xs leading-none">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            0
-          </span>
-          {isOwner && (
-            <Link
-              to="/me/edit"
-              title="編集する"
-              className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-            </Link>
-          )}
+          <StarWatchButtons targetId={profile.id} isOwner={!!isOwner} />
         </div>
 
         <div className="flex gap-4 items-start mb-7">

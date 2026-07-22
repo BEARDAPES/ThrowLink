@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
 import { EventListSection, type EventListItem } from './EventListSection'
+import { StarWatchButtons } from './StarWatchButtons'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -56,6 +57,9 @@ export function StoreProfileCard({ profile, events, isOwner, onSignOut }: StoreP
   return (
     <div className="min-h-screen bg-ink font-tl-sans flex justify-center px-6 py-16 sm:py-24">
       <div className="w-full max-w-[560px] animate-tl-rise text-left">
+        <div className="flex justify-end mb-5">
+          <StarWatchButtons targetId={profile.id} isOwner={!!isOwner} />
+        </div>
         <header className="flex flex-col items-center text-center mb-12">
           <div
             className="w-[132px] h-[132px] rounded-full p-1.5 border-2 border-brass flex items-center justify-center mb-5"
