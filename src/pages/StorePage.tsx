@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { StoreProfileCard } from '../components/StoreProfileCard'
 import type { EventListItem } from '../components/EventListSection'
 import type { Database } from '../types/database.types'
+import { useParams } from 'react-router'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type StoreRow = Database['public']['Tables']['stores']['Row']
 
 export function StorePage() {
   const { slug } = useParams<{ slug: string }>()
-  const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [store, setStore] = useState<StoreRow | null>(null)
   const [events, setEvents] = useState<EventListItem[]>([])
@@ -63,11 +62,6 @@ export function StorePage() {
     load(slug)
   }, [slug])
 
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-    navigate('/sign-in')
-  }
-
   if (status === 'loading') return null
 
   if (status === 'not-found' || !profile) {
@@ -78,5 +72,5 @@ export function StorePage() {
     )
   }
 
-  return <StoreProfileCard profile={profile} store={store} events={events} isOwner={isOwner} onSignOut={handleSignOut} />
+  return <StoreProfileCard profile={profile} store={store} events={events} isOwner={isOwner} />
 }

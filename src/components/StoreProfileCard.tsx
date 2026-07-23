@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
 import { EventListSection, type EventListItem } from './EventListSection'
 import { StarWatchButtons } from './StarWatchButtons'
+import { StoreManagementMenu } from './StoreManagementMenu'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -12,7 +13,6 @@ interface StoreProfileCardProps {
   store: StoreRow | null
   events: EventListItem[]
   isOwner?: boolean
-  onSignOut?: () => void
 }
 
 type SnsLink = { platform: string; url: string }
@@ -51,7 +51,7 @@ function isOpenNow(open: string | null, close: string | null): boolean | null {
   const [ch, cm] = close.split(':').map(Number)
   const openMin = oh * 60 + om
   let closeMin = ch * 60 + cm
-  if (closeMin <= openMin) closeMin += 24 * 60 // 深夜営業(翌日にまたぐ)
+  if (closeMin <= openMin) closeMin += 24 * 60
   const adjustedNow = minutesNow < openMin ? minutesNow + 24 * 60 : minutesNow
   return adjustedNow >= openMin && adjustedNow < closeMin
 }
@@ -67,10 +67,7 @@ const DART_RING = `conic-gradient(
   var(--color-cream) 315deg 337.5deg, var(--color-ink-2) 337.5deg 360deg
 )`
 
-const footerLinkClass =
-  'font-tl-mono text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-chalk transition-colors'
-
-export function StoreProfileCard({ profile, store, events, isOwner, onSignOut }: StoreProfileCardProps) {
+export function StoreProfileCard({ profile, store, events, isOwner }: StoreProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
   const atmosphereTags = Array.isArray(store?.atmosphere_tags) ? (store.atmosphere_tags as string[]) : []
@@ -82,16 +79,19 @@ export function StoreProfileCard({ profile, store, events, isOwner, onSignOut }:
         <div className="flex justify-end items-center gap-2 mb-5">
           <StarWatchButtons targetId={profile.id} isOwner={!!isOwner} />
           {isOwner && (
-            <Link
-              to="/me/edit"
-              title="編集する"
-              className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-            </Link>
+            <>
+              <Link
+                to="/me/edit"
+                title="編集する"
+                className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </Link>
+              <StoreManagementMenu />
+            </>
           )}
         </div>
 
@@ -255,22 +255,6 @@ export function StoreProfileCard({ profile, store, events, isOwner, onSignOut }:
                 <span className="text-chalk-dim text-xs group-hover:text-dart-red transition-colors">↗</span>
               </a>
             ))}
-          </div>
-        )}
-
-        {isOwner ? (
-          <div className="mt-4 pt-6 border-t border-brass/35 text-center">
-            <Link to="/me/dashboard" className={footerLinkClass}>
-              依頼・イベント管理
-            </Link>
-            <span className="mx-3 text-brass/50">・</span>
-            <button type="button" onClick={onSignOut} className={footerLinkClass}>
-              サインアウト
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4 pt-6 border-t border-brass/35 text-xs text-chalk-dim text-center leading-relaxed">
-            ダーツバー・店舗として登録されています。
           </div>
         )}
       </div>
