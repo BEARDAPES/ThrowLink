@@ -116,6 +116,18 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, i
       <div className="w-full max-w-[560px] animate-tl-rise text-left">
         <div className="flex justify-end items-center gap-2 mb-5">
           <StarWatchButtons targetId={profile.id} isOwner={!!isOwner} />
+          {isOwner && (
+            <Link
+              to="/me/edit"
+              title="編集する"
+              className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </Link>
+          )}
         </div>
 
         <div className="flex gap-4 items-start mb-7">
