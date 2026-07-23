@@ -101,6 +101,12 @@ export function NavBar() {
         </div>
       </div>
 
+      <div className="bg-dart-red/10 border-y border-dart-red/25 px-6 py-2 text-center">
+        <p className="font-tl-mono text-[11px] text-chalk-dim">
+          ⚠ このサイトは開発中です。登録されている情報は実在するものではありません。
+        </p>
+      </div>
+
       <NotificationPanel open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
     </nav>
   )
