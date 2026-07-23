@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useLocation } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { NotificationPanel } from './NotificationPanel'
 
@@ -7,22 +7,33 @@ const navIconClass = 'flex items-center justify-center text-chalk-dim hover:text
 
 export function NavBar() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     let active = true
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (active) setIsSignedIn(!!user)
+      if (!active) return
+      setIsSignedIn(!!user)
+      if (!user) return
+
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('recipient_id', user.id)
+        .is('read_at', null)
+      if (active) setUnreadCount(count ?? 0)
     }
 
     load()
     return () => {
       active = false
     }
-  }, [])
+  }, [location.pathname])
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -66,6 +77,11 @@ export function NavBar() {
                   <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
                   <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
                 </svg>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-dart-red text-chalk font-tl-mono text-[9px] font-semibold leading-none px-1 py-0.5 rounded-full min-w-[13px] text-center">
+                    {unreadCount}
+                  </span>
+                )}
               </button>
               <button type="button" onClick={handleSignOut} title="サインアウト" className={navIconClass}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

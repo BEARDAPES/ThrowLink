@@ -1,0 +1,1 @@
+grant delete on table store_staff to authenticated;

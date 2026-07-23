@@ -23,6 +23,7 @@ export function PlayerProfilePage() {
   const [myUpcomingEvents, setMyUpcomingEvents] = useState<EventListItem[]>([])
   const [isOwner, setIsOwner] = useState(false)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>('loading')
+  const [employedStores, setEmployedStores] = useState<{ display_name: string; slug: string | null }[]>([])
 
   useEffect(() => {
     if (!slug) return
@@ -108,6 +109,21 @@ export function PlayerProfilePage() {
         setMyUpcomingEvents(upcoming)
       }
 
+      const { data: staffData } = await supabase
+      .from('store_staff')
+      .select('store_id')
+      .eq('player_id', profileData.id)
+      .eq('status', 'active')
+
+      const staffStoreIds = (staffData ?? []).map((s) => s.store_id)
+      if (staffStoreIds.length > 0) {
+        const { data: staffStoresData } = await supabase
+          .from('profiles')
+          .select('display_name, slug')
+          .in('id', staffStoreIds)
+        setEmployedStores(staffStoresData ?? [])
+      }
+
       setStatus('ready')
     }
 
@@ -133,6 +149,7 @@ export function PlayerProfilePage() {
     <PlayerProfileCard
       profile={profile}
       player={player}
+      employedStores={employedStores}
       events={events}
       myUpcomingEvents={myUpcomingEvents}
       isOwner={isOwner}

@@ -16,6 +16,7 @@ interface PlayerProfileCardProps {
   events: EventListItem[]
   myUpcomingEvents: EventListItem[]
   isOwner?: boolean
+  employedStores: { display_name: string; slug: string | null }[]
   onSignOut?: () => void
 }
 
@@ -77,7 +78,7 @@ const DART_RING = `conic-gradient(
 const footerLinkClass =
   'font-tl-mono text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-chalk transition-colors'
 
-export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, isOwner, onSignOut }: PlayerProfileCardProps) {
+export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, employedStores, isOwner, onSignOut }: PlayerProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
   const isPro = player?.is_pro ?? false
@@ -186,6 +187,23 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, i
 
         {(player?.home_shop || player?.home_shop_text || player?.sake_rating != null || hasRatingRow || player?.years_playing != null || player?.dart_setup || achievements.length > 0) && (
           <div className="space-y-3.5 mb-7">
+            {employedStores.length > 0 && (
+              <div>
+                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">勤務店舗</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {employedStores.map((s) => (
+                    <Link
+                      key={s.slug}
+                      to={`/stores/${s.slug}`}
+                      className="text-[13px] text-chalk underline decoration-brass/50 underline-offset-4 hover:text-dart-red transition-colors"
+                    >
+                      {s.display_name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {(player?.home_shop || player?.home_shop_text) && (
               <div>
                 <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">ホームショップ</div>

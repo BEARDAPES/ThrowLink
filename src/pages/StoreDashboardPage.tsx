@@ -19,6 +19,7 @@ export function StoreDashboardPage() {
   const navigate = useNavigate()
   const [events, setEvents] = useState<EventRow[] | null>(null)
   const [offersByEvent, setOffersByEvent] = useState<Record<string, OfferRow[]>>({})
+  const [storeSlug, setStoreSlug] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -27,6 +28,9 @@ export function StoreDashboardPage() {
         navigate('/sign-in')
         return
       }
+
+      const { data: profileData } = await supabase.from('profiles').select('slug').eq('id', user.id).maybeSingle()
+      setStoreSlug(profileData?.slug ?? null)
 
       const { data: eventsData } = await supabase
         .from('events')
@@ -59,6 +63,15 @@ export function StoreDashboardPage() {
   return (
     <div className="min-h-screen bg-ink font-tl-sans px-6 py-16 sm:py-24 flex justify-center">
       <div className="w-full max-w-[560px]">
+        {storeSlug && (
+          <Link
+            to={`/stores/${storeSlug}`}
+            className="flex items-center gap-1 font-tl-mono text-xs text-chalk-dim tracking-wide hover:text-dart-red transition-colors mb-6"
+          >
+            ← 店舗ホーム
+          </Link>
+        )}
+
         <div className="flex items-center justify-between mb-10">
           <h1 className="font-display text-3xl font-bold uppercase tracking-wide text-chalk">
             依頼・イベント管理

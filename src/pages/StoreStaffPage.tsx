@@ -16,6 +16,7 @@ const STATUS_LABEL: Record<string, string> = {
   active: '在籍中',
   declined: '辞退',
   left: '離職',
+  withdrawn: '招待取り消し',
 }
 
 export function StoreStaffPage() {
@@ -25,6 +26,7 @@ export function StoreStaffPage() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PlayerOption[]>([])
   const [storeId, setStoreId] = useState<string | null>(null)
+  const [storeSlug, setStoreSlug] = useState<string | null>(null)
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -33,6 +35,9 @@ export function StoreStaffPage() {
       return
     }
     setStoreId(user.id)
+
+    const { data: profileData } = await supabase.from('profiles').select('slug').eq('id', user.id).maybeSingle()
+    setStoreSlug(profileData?.slug ?? null)
 
     const { data } = await supabase
       .from('store_staff')
@@ -60,15 +65,30 @@ export function StoreStaffPage() {
         .eq('role', 'player')
         .ilike('display_name', `%${query}%`)
         .limit(5)
-      const alreadyStaff = new Set(staff.map((s) => s.player_id))
-      setResults((data ?? []).filter((p) => !alreadyStaff.has(p.id)))
+      const currentlyLinked = new Set(
+        staff.filter((s) => s.status === 'invited' || s.status === 'active').map((s) => s.player_id)
+      )
+      setResults((data ?? []).filter((p) => !currentlyLinked.has(p.id)))
     }, 250)
     return () => clearTimeout(timer)
   }, [query, staff])
 
-  async function invite(player: PlayerOption) {
+  // 検索経由(新規 or 過去の相手)と、過去スタッフ一覧の「再雇用」ボタンの
+  // 両方から呼ばれる共通処理。既存行があればinvitedに戻し、無ければ新規作成する。
+  async function inviteOrReinvite(playerId: string) {
     if (!storeId) return
-    await supabase.from('store_staff').insert({ store_id: storeId, player_id: player.id })
+    const existing = staff.find((s) => s.player_id === playerId)
+
+    if (existing) {
+      await supabase
+        .from('store_staff')
+        .update({ status: 'invited', is_admin: false })
+        .eq('store_id', storeId)
+        .eq('player_id', playerId)
+    } else {
+      await supabase.from('store_staff').insert({ store_id: storeId, player_id: playerId })
+    }
+
     setQuery('')
     setResults([])
     await load()
@@ -88,7 +108,7 @@ export function StoreStaffPage() {
 
   async function cancelInvitation(row: StaffRow) {
     if (!storeId) return
-    await supabase.from('store_staff').delete().eq('store_id', storeId).eq('player_id', row.player_id)
+    await supabase.from('store_staff').update({ status: 'withdrawn' }).eq('store_id', storeId).eq('player_id', row.player_id)
     await load()
   }
 
@@ -96,14 +116,19 @@ export function StoreStaffPage() {
 
   const invited = staff.filter((s) => s.status === 'invited')
   const active = staff.filter((s) => s.status === 'active')
-  const inactive = staff.filter((s) => s.status === 'declined' || s.status === 'left')
+  const inactive = staff.filter((s) => s.status === 'declined' || s.status === 'left' || s.status === 'withdrawn')
 
   return (
     <div className="min-h-screen bg-ink font-tl-sans px-6 py-16 flex justify-center">
       <div className="w-full max-w-[560px]">
-        <Link to="/me/dashboard" className="flex items-center gap-1 font-tl-mono text-xs text-chalk-dim tracking-wide hover:text-dart-red transition-colors mb-6">
-          ← イベント一覧
-        </Link>
+        {storeSlug && (
+          <Link
+            to={`/stores/${storeSlug}`}
+            className="flex items-center gap-1 font-tl-mono text-xs text-chalk-dim tracking-wide hover:text-dart-red transition-colors mb-6"
+          >
+            ← 店舗ホーム
+          </Link>
+        )}
 
         <h1 className="font-display text-3xl font-bold uppercase tracking-wide text-chalk mb-10">
           スタッフ管理
@@ -184,7 +209,7 @@ export function StoreStaffPage() {
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => invite(p)}
+                  onClick={() => inviteOrReinvite(p.id)}
                   className="w-full flex items-center justify-between px-3 py-2 text-sm text-chalk hover:bg-ink-2 transition-colors"
                 >
                   <span>{p.display_name}</span>
@@ -200,9 +225,18 @@ export function StoreStaffPage() {
             <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">過去のスタッフ</p>
             <div className="space-y-2">
               {inactive.map((row) => (
-                <div key={row.player_id} className="flex items-center justify-between px-3 py-2 text-chalk-dim text-sm">
-                  <span>{row.players?.profiles?.display_name}</span>
-                  <span className="font-tl-mono text-xs">{STATUS_LABEL[row.status]}</span>
+                <div key={row.player_id} className="flex items-center justify-between px-3 py-2">
+                  <div>
+                    <span className="text-chalk-dim text-sm">{row.players?.profiles?.display_name}</span>
+                    <span className="font-tl-mono text-xs text-chalk-dim ml-2">{STATUS_LABEL[row.status]}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => inviteOrReinvite(row.player_id)}
+                    className="font-tl-mono text-xs text-dart-red hover:opacity-80 transition-opacity shrink-0"
+                  >
+                    再雇用する
+                  </button>
                 </div>
               ))}
             </div>
