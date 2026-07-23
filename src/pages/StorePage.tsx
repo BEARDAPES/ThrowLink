@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useParams } from 'react-router'
 import { supabase } from '../lib/supabase'
-import { StoreProfileCard } from '../components/StoreProfileCard'
+import { StoreProfileCard, type StaffMember } from '../components/StoreProfileCard'
 import type { EventListItem } from '../components/EventListSection'
 import type { Database } from '../types/database.types'
-import { useParams } from 'react-router'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type StoreRow = Database['public']['Tables']['stores']['Row']
@@ -13,6 +13,7 @@ export function StorePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [store, setStore] = useState<StoreRow | null>(null)
   const [events, setEvents] = useState<EventListItem[]>([])
+  const [staff, setStaff] = useState<StaffMember[]>([])
   const [isOwner, setIsOwner] = useState(false)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>('loading')
 
@@ -56,6 +57,30 @@ export function StorePage() {
         (eventsData ?? []).map((e) => ({ id: e.id, title: e.event_title, startAt: e.event_start_at, status: e.status }))
       )
 
+      // 在籍中のスタッフ一覧(店舗の公開ページ用、ADMIN情報は含めない)
+      const { data: staffRows } = await supabase
+        .from('store_staff')
+        .select('player_id')
+        .eq('store_id', profileData.id)
+        .eq('status', 'active')
+
+      const staffIds = (staffRows ?? []).map((s) => s.player_id)
+      if (staffIds.length > 0) {
+        const { data: staffProfiles } = await supabase
+          .from('profiles')
+          .select('id, display_name, avatar_url, slug, players(is_pro)')
+          .in('id', staffIds)
+        setStaff(
+          (staffProfiles ?? []).map((p) => ({
+            id: p.id,
+            displayName: p.display_name,
+            avatarUrl: p.avatar_url,
+            slug: p.slug,
+            isPro: p.players?.is_pro ?? false,
+          }))
+        )
+      }
+
       setStatus('ready')
     }
 
@@ -72,5 +97,5 @@ export function StorePage() {
     )
   }
 
-  return <StoreProfileCard profile={profile} store={store} events={events} isOwner={isOwner} />
+  return <StoreProfileCard profile={profile} store={store} events={events} staff={staff} isOwner={isOwner} />
 }

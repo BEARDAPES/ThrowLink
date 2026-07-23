@@ -1,17 +1,31 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
 import { EventListSection, type EventListItem } from './EventListSection'
 import { StarWatchButtons } from './StarWatchButtons'
 import { StoreManagementMenu } from './StoreManagementMenu'
+import { MonthCalendar, type CalendarMarker } from './MonthCalendar'
+import { supabase } from '../lib/supabase'
+import { addDaysToDateString, parseLocalDate } from '../lib/datetime'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type StoreRow = Database['public']['Tables']['stores']['Row']
+type ScheduleEntry = Database['public']['Tables']['player_schedule_entries']['Row']
+
+export interface StaffMember {
+  id: string
+  displayName: string
+  avatarUrl: string | null
+  slug: string | null
+  isPro: boolean
+}
 
 interface StoreProfileCardProps {
   profile: Profile
   store: StoreRow | null
   events: EventListItem[]
+  staff: StaffMember[]
   isOwner?: boolean
 }
 
@@ -56,6 +70,15 @@ function isOpenNow(open: string | null, close: string | null): boolean | null {
   return adjustedNow >= openMin && adjustedNow < closeMin
 }
 
+function formatDateRange(start: string, end: string): string {
+  const currentYear = new Date().getFullYear()
+  const s = parseLocalDate(start)
+  const e = parseLocalDate(end)
+  const fmt = (d: Date) =>
+    d.getFullYear() !== currentYear ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : `${d.getMonth() + 1}/${d.getDate()}`
+  return start === end ? fmt(s) : `${fmt(s)} 〜 ${fmt(e)}`
+}
+
 const DART_RING = `conic-gradient(
   var(--color-cream) 0deg 22.5deg, var(--color-ink-2) 22.5deg 45deg,
   var(--color-cream) 45deg 67.5deg, var(--color-ink-2) 67.5deg 90deg,
@@ -67,11 +90,71 @@ const DART_RING = `conic-gradient(
   var(--color-cream) 315deg 337.5deg, var(--color-ink-2) 337.5deg 360deg
 )`
 
-export function StoreProfileCard({ profile, store, events, isOwner }: StoreProfileCardProps) {
+export function StoreProfileCard({ profile, store, events, staff, isOwner }: StoreProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
   const atmosphereTags = Array.isArray(store?.atmosphere_tags) ? (store.atmosphere_tags as string[]) : []
   const openNow = store ? isOpenNow(store.business_open_time, store.business_close_time) : null
+
+  const now = new Date()
+
+  // イベントカレンダー
+  const [evYear, setEvYear] = useState(now.getFullYear())
+  const [evMonth, setEvMonth] = useState(now.getMonth())
+  const eventMarkers: CalendarMarker[] = events
+    .filter((e) => (e.status === 'published' || e.status === 'completed') && e.startAt)
+    .map((e) => ({ date: e.startAt!.slice(0, 10), kind: 'event' as const }))
+
+  // スタッフ稼働カレンダー(選択中のスタッフの公開予定を表示)
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(staff[0]?.id ?? null)
+  const [staYear, setStaYear] = useState(now.getFullYear())
+  const [staMonth, setStaMonth] = useState(now.getMonth())
+  const [staffSchedule, setStaffSchedule] = useState<ScheduleEntry[]>([])
+  const [staffMarkers, setStaffMarkers] = useState<CalendarMarker[]>([])
+
+  useEffect(() => {
+    async function loadStaffSchedule() {
+      if (!selectedStaffId) {
+        setStaffSchedule([])
+        setStaffMarkers([])
+        return
+      }
+      const { data } = await supabase
+        .from('player_schedule_entries')
+        .select('*')
+        .eq('player_id', selectedStaffId)
+        .eq('visibility', 'public')
+        .order('start_date', { ascending: true })
+      setStaffSchedule(data ?? [])
+
+      const markers: CalendarMarker[] = []
+      for (const entry of data ?? []) {
+        let cursor = entry.start_date
+        while (cursor <= entry.end_date) {
+          markers.push({ date: cursor, kind: 'schedule' })
+          cursor = addDaysToDateString(cursor, 1)
+        }
+      }
+      setStaffMarkers(markers)
+    }
+    loadStaffSchedule()
+  }, [selectedStaffId])
+
+  const eventListItems = events
+    .filter((e) => (e.status === 'published' || e.status === 'completed') && e.startAt)
+    .filter((e) => {
+      const d = new Date(e.startAt!)
+      return d.getFullYear() === evYear && d.getMonth() === evMonth
+    })
+    .sort((a, b) => (a.startAt ?? '').localeCompare(b.startAt ?? ''))
+
+  const staffListItems = staffSchedule
+    .filter((entry) => {
+      const monthStart = new Date(staYear, staMonth, 1)
+      const monthEnd = new Date(staYear, staMonth + 1, 0)
+      return parseLocalDate(entry.start_date) <= monthEnd && parseLocalDate(entry.end_date) >= monthStart
+    })
+    .sort((a, b) => a.start_date.localeCompare(b.start_date))
 
   return (
     <div className="min-h-screen bg-ink font-tl-sans flex justify-center px-6 py-16 sm:py-24">
@@ -233,6 +316,81 @@ export function StoreProfileCard({ profile, store, events, isOwner }: StoreProfi
           <div className="mb-10 pb-8 border-b border-brass/35">
             <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-2.5 leading-none">お店について</p>
             <p className="text-[15px] leading-loose text-chalk">{profile.bio_text}</p>
+          </div>
+        )}
+
+        {staff.length > 0 && (
+          <div className="mb-10">
+            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">スタッフ稼働カレンダー</p>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {staff.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelectedStaffId(s.id)}
+                  className={`font-tl-mono text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                    selectedStaffId === s.id ? 'border-brass bg-ink-2 text-chalk' : 'border-brass/35 text-chalk-dim hover:border-brass'
+                  }`}
+                >
+                  {s.displayName}
+                </button>
+              ))}
+            </div>
+            <MonthCalendar markers={staffMarkers} year={staYear} month={staMonth} onPrevMonth={() => (staMonth === 0 ? (setStaYear((y) => y - 1), setStaMonth(11)) : setStaMonth((m) => m - 1))} onNextMonth={() => (staMonth === 11 ? (setStaYear((y) => y + 1), setStaMonth(0)) : setStaMonth((m) => m + 1))} />
+            <div className="mt-4 space-y-2">
+              {staffListItems.length === 0 ? (
+                <p className="text-xs text-chalk-dim">この月の不在予定はありません。</p>
+              ) : (
+                staffListItems.map((entry) => (
+                  <div key={entry.id} className="flex items-center gap-2 py-2 border-b border-brass/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-dart-red shrink-0" />
+                    <span className="font-tl-mono text-xs text-chalk-dim shrink-0">{formatDateRange(entry.start_date, entry.end_date)}</span>
+                    {entry.reason && <span className="text-chalk text-sm truncate">{entry.reason}</span>}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {events.length > 0 && (
+          <div className="mb-10">
+            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">イベントカレンダー</p>
+            <MonthCalendar markers={eventMarkers} year={evYear} month={evMonth} onPrevMonth={() => (evMonth === 0 ? (setEvYear((y) => y - 1), setEvMonth(11)) : setEvMonth((m) => m - 1))} onNextMonth={() => (evMonth === 11 ? (setEvYear((y) => y + 1), setEvMonth(0)) : setEvMonth((m) => m + 1))} />
+            <div className="mt-4 space-y-2">
+              {eventListItems.length === 0 ? (
+                <p className="text-xs text-chalk-dim">この月のイベントはありません。</p>
+              ) : (
+                eventListItems.map((e) => (
+                  <Link key={e.id} to={`/events/${e.id}`} className="flex items-center gap-2 py-2 border-b border-brass/20 hover:text-dart-red transition-colors">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brass shrink-0" />
+                    <span className="font-tl-mono text-xs text-chalk-dim shrink-0">
+                      {new Date(e.startAt!).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' })}
+                    </span>
+                    <span className="text-chalk text-sm truncate">{e.title}</span>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {staff.length > 0 && (
+          <div className="mb-10">
+            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">所属スタッフ</p>
+            <div>
+              {staff.map((s) => (
+                <Link key={s.id} to={s.slug ? `/players/${s.slug}` : '#'} className="flex items-center gap-3 py-3 border-b border-brass/20 hover:text-dart-red transition-colors">
+                  <span className="w-9 h-9 rounded-full border border-brass/50 overflow-hidden shrink-0 bg-ink-2 flex items-center justify-center font-display text-xs text-chalk">
+                    {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-full h-full object-cover" /> : s.displayName.trim().slice(0, 2)}
+                  </span>
+                  <span className="flex-1 min-w-0 text-chalk text-sm truncate">{s.displayName}</span>
+                  {s.isPro && (
+                    <span className="font-tl-mono text-[10px] font-semibold tracking-widest text-ink bg-dart-red px-1.5 py-0.5 rounded-sm shrink-0">PRO</span>
+                  )}
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 
