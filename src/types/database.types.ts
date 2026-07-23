@@ -34,6 +34,21 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          value: string
+        }
+        Insert: {
+          key: string
+          value: string
+        }
+        Update: {
+          key?: string
+          value?: string
+        }
+        Relationships: []
+      }
       b2b_reviews: {
         Row: {
           comment: string | null
@@ -228,6 +243,47 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_schedule_entries: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          player_id: string
+          reason: string | null
+          start_date: string
+          status: string
+          visibility: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          player_id: string
+          reason?: string | null
+          start_date: string
+          status: string
+          visibility?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          player_id?: string
+          reason?: string | null
+          start_date?: string
+          status?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_schedule_entries_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]
@@ -444,6 +500,153 @@ export type Database = {
           },
         ]
       }
+      store_closures: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          reason: string | null
+          start_date: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          reason?: string | null
+          start_date: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          reason?: string | null
+          start_date?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_closures_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_staff: {
+        Row: {
+          created_at: string
+          is_admin: boolean
+          player_id: string
+          status: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          is_admin?: boolean
+          player_id: string
+          status?: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          is_admin?: boolean
+          player_id?: string
+          status?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_staff_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_staff_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_staff_attendance_logs: {
+        Row: {
+          clocked_in_at: string
+          clocked_out_at: string | null
+          id: string
+          player_id: string
+          store_id: string
+        }
+        Insert: {
+          clocked_in_at?: string
+          clocked_out_at?: string | null
+          id?: string
+          player_id: string
+          store_id: string
+        }
+        Update: {
+          clocked_in_at?: string
+          clocked_out_at?: string | null
+          id?: string
+          player_id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_staff_attendance_logs_store_id_player_id_fkey"
+            columns: ["store_id", "player_id"]
+            isOneToOne: false
+            referencedRelation: "store_staff"
+            referencedColumns: ["store_id", "player_id"]
+          },
+        ]
+      }
+      store_staff_shifts: {
+        Row: {
+          created_at: string
+          end_time: string | null
+          id: string
+          player_id: string
+          start_time: string | null
+          status: string
+          store_id: string
+          weekday: number
+        }
+        Insert: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          player_id: string
+          start_time?: string | null
+          status: string
+          store_id: string
+          weekday: number
+        }
+        Update: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          player_id?: string
+          start_time?: string | null
+          status?: string
+          store_id?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_staff_shifts_store_id_player_id_fkey"
+            columns: ["store_id", "player_id"]
+            isOneToOne: false
+            referencedRelation: "store_staff"
+            referencedColumns: ["store_id", "player_id"]
+          },
+        ]
+      }
       stores: {
         Row: {
           address: string | null
@@ -455,6 +658,7 @@ export type Database = {
           parking_available: boolean | null
           phoenix_shop_url: string | null
           phone_number: string | null
+          regular_closed_weekdays: number[]
           smoking_allowed: boolean | null
         }
         Insert: {
@@ -467,6 +671,7 @@ export type Database = {
           parking_available?: boolean | null
           phoenix_shop_url?: string | null
           phone_number?: string | null
+          regular_closed_weekdays?: number[]
           smoking_allowed?: boolean | null
         }
         Update: {
@@ -479,6 +684,7 @@ export type Database = {
           parking_available?: boolean | null
           phoenix_shop_url?: string | null
           phone_number?: string | null
+          regular_closed_weekdays?: number[]
           smoking_allowed?: boolean | null
         }
         Relationships: [
@@ -496,6 +702,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_clock_out_overdue_staff: { Args: never; Returns: undefined }
+      can_manage_store_staff_data: {
+        Args: { target_player_id: string; target_store_id: string }
+        Returns: boolean
+      }
       complete_stale_events: { Args: never; Returns: undefined }
       fan_stats: {
         Args: { target_user_id?: string }
@@ -503,6 +714,16 @@ export type Database = {
           participation_count: number
           user_id: string
         }[]
+      }
+      get_fallback_clock_out_hours: { Args: never; Returns: number }
+      player_is_available: {
+        Args: {
+          exclude_event_id?: string
+          range_end: string
+          range_start: string
+          target_player_id: string
+        }
+        Returns: boolean
       }
       pro_has_active_offer: {
         Args: { p_event_id: string; p_pro_id: string }
