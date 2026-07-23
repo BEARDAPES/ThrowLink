@@ -17,6 +17,7 @@ import { MyOffersPage } from './pages/MyOffersPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { StoreStaffPage } from './pages/StoreStaffPage'
 import { PlayerStaffInvitationsPage } from './pages/PlayerStaffInvitationsPage'
+import { PlayerSchedulePage } from './pages/PlayerSchedulePage'
 
 export const router = createBrowserRouter([
   {
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
       { path: '/reset-password', element: <ResetPasswordPage /> },
       { path: '/me/staff', element: <StoreStaffPage /> },
       { path: '/me/staff-invitations', element: <PlayerStaffInvitationsPage /> },
+      { path: '/me/schedule', element: <PlayerSchedulePage /> },
     ],
   },
 ])

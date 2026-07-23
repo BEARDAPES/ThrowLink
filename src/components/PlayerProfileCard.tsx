@@ -4,6 +4,7 @@ import { EventListSection, type EventListItem } from './EventListSection'
 import { getDartsLiveInfo, getPhoenixInfo, DARTSLIVE_COLORS } from '../lib/ratings'
 import { PRO_ONLY_STATUS_TAGS } from '../lib/statusTags'
 import { StarWatchButtons } from './StarWatchButtons'
+import { PlayerManagementMenu } from './PlayerManagementMenu'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -15,9 +16,8 @@ interface PlayerProfileCardProps {
   player: PlayerWithHomeShop | null
   events: EventListItem[]
   myUpcomingEvents: EventListItem[]
-  isOwner?: boolean
   employedStores: { display_name: string; slug: string | null }[]
-  onSignOut?: () => void
+  isOwner?: boolean
 }
 
 type SnsLink = { platform: string; url: string }
@@ -75,10 +75,7 @@ const DART_RING = `conic-gradient(
   var(--color-cream) 315deg 337.5deg, var(--color-ink-2) 337.5deg 360deg
 )`
 
-const footerLinkClass =
-  'font-tl-mono text-xs text-chalk-dim tracking-wide underline decoration-brass/50 underline-offset-4 hover:text-chalk transition-colors'
-
-export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, employedStores, isOwner, onSignOut }: PlayerProfileCardProps) {
+export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, employedStores, isOwner }: PlayerProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
   const isPro = player?.is_pro ?? false
@@ -118,22 +115,25 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, e
         <div className="flex justify-end items-center gap-2 mb-5">
           <StarWatchButtons targetId={profile.id} isOwner={!!isOwner} />
           {isOwner && (
-            <Link
-              to="/me/edit"
-              title="編集する"
-              className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-            </Link>
+            <>
+              <Link
+                to="/me/edit"
+                title="編集する"
+                className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </Link>
+              <PlayerManagementMenu isPro={isPro} />
+            </>
           )}
         </div>
 
         <div className="flex gap-4 items-start mb-7">
           <div
-            className="w-[110px] h-[104px] rounded-full p-1 border-2 border-brass flex items-center justify-center shrink-0"
+            className="w-[110px] h-[110px] rounded-full p-1 border-2 border-brass flex items-center justify-center shrink-0"
             style={{ background: DART_RING }}
           >
             {profile.avatar_url ? (
@@ -185,7 +185,7 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, e
           </div>
         </div>
 
-        {(player?.home_shop || player?.home_shop_text || player?.sake_rating != null || hasRatingRow || player?.years_playing != null || player?.dart_setup || achievements.length > 0) && (
+        {(employedStores.length > 0 || player?.home_shop || player?.home_shop_text || player?.sake_rating != null || hasRatingRow || player?.years_playing != null || player?.dart_setup || achievements.length > 0) && (
           <div className="space-y-3.5 mb-7">
             {employedStores.length > 0 && (
               <div>
@@ -329,21 +329,7 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, e
           </div>
         )}
 
-        {isOwner ? (
-          <div className="mt-4 pt-6 border-t border-brass/35 text-center">
-            {isPro && (
-              <>
-                <Link to="/me/offers" className={footerLinkClass}>
-                  オファー一覧
-                </Link>
-                <span className="mx-3 text-brass/50">・</span>
-              </>
-            )}
-            <button type="button" onClick={onSignOut} className={footerLinkClass}>
-              サインアウト
-            </button>
-          </div>
-        ) : (
+        {!isOwner && (
           <div className="mt-4 pt-6 border-t border-brass/35 text-xs text-chalk-dim text-center leading-relaxed">
             店舗の方へ: 出演のご依頼はプロフィール所有者からの承認制です。
           </div>

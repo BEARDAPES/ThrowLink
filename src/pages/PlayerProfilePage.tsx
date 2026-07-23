@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router'
+import { useParams } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { PlayerProfileCard } from '../components/PlayerProfileCard'
 import type { EventListItem } from '../components/EventListSection'
@@ -16,7 +16,6 @@ function buildVenue(store: { display_name: string; stores: { address: string | n
 
 export function PlayerProfilePage() {
   const { slug } = useParams<{ slug: string }>()
-  const navigate = useNavigate()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [player, setPlayer] = useState<PlayerWithHomeShop | null>(null)
   const [events, setEvents] = useState<EventListItem[]>([])
@@ -130,11 +129,6 @@ export function PlayerProfilePage() {
     load(slug)
   }, [slug])
 
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-    navigate('/sign-in')
-  }
-
   if (status === 'loading') return null
 
   if (status === 'not-found' || !profile) {
@@ -153,7 +147,6 @@ export function PlayerProfilePage() {
       events={events}
       myUpcomingEvents={myUpcomingEvents}
       isOwner={isOwner}
-      onSignOut={handleSignOut}
     />
   )
 }

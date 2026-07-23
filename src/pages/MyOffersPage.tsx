@@ -45,6 +45,9 @@ export function MyOffersPage() {
   return (
     <div className="min-h-screen bg-ink font-tl-sans px-6 py-16 flex justify-center">
       <div className="w-full max-w-[560px]">
+        <Link to="/me" className="flex items-center gap-1 font-tl-mono text-xs text-chalk-dim tracking-wide hover:text-dart-red transition-colors mb-6">
+          ← マイページ
+        </Link>
         <h1 className="font-display text-3xl font-bold uppercase tracking-wide text-chalk mb-10">
           オファー一覧
         </h1>
