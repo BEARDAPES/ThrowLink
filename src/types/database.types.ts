@@ -293,7 +293,6 @@ export type Database = {
           player_id: string
           reason: string | null
           start_date: string
-          status: string
           visibility: string
         }
         Insert: {
@@ -303,7 +302,6 @@ export type Database = {
           player_id: string
           reason?: string | null
           start_date: string
-          status: string
           visibility?: string
         }
         Update: {
@@ -313,7 +311,6 @@ export type Database = {
           player_id?: string
           reason?: string | null
           start_date?: string
-          status?: string
           visibility?: string
         }
         Relationships: [

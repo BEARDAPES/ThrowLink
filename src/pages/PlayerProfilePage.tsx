@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { PlayerProfileCard } from '../components/PlayerProfileCard'
+import { addDaysToDateString } from '../lib/datetime'
 import type { EventListItem } from '../components/EventListSection'
+import type { CalendarMarker } from '../components/MonthCalendar'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type PlayerRow = Database['public']['Tables']['players']['Row']
 type PlayerWithHomeShop = PlayerRow & { home_shop: { display_name: string; slug: string | null } | null }
+type ScheduleEntry = Database['public']['Tables']['player_schedule_entries']['Row']
 
 function buildVenue(store: { display_name: string; stores: { address: string | null } | null } | null): string | undefined {
   if (!store) return undefined
@@ -20,9 +23,11 @@ export function PlayerProfilePage() {
   const [player, setPlayer] = useState<PlayerWithHomeShop | null>(null)
   const [events, setEvents] = useState<EventListItem[]>([])
   const [myUpcomingEvents, setMyUpcomingEvents] = useState<EventListItem[]>([])
+  const [employedStores, setEmployedStores] = useState<{ display_name: string; slug: string | null }[]>([])
+  const [upcomingSchedule, setUpcomingSchedule] = useState<ScheduleEntry[]>([])
+  const [calendarMarkers, setCalendarMarkers] = useState<CalendarMarker[]>([])
   const [isOwner, setIsOwner] = useState(false)
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found'>('loading')
-  const [employedStores, setEmployedStores] = useState<{ display_name: string; slug: string | null }[]>([])
 
   useEffect(() => {
     if (!slug) return
@@ -68,6 +73,21 @@ export function PlayerProfilePage() {
       const isOwnerNow = user?.id === profileData.id
       setIsOwner(isOwnerNow)
 
+      const { data: staffData } = await supabase
+        .from('store_staff')
+        .select('store_id')
+        .eq('player_id', profileData.id)
+        .eq('status', 'active')
+
+      const staffStoreIds = (staffData ?? []).map((s) => s.store_id)
+      if (staffStoreIds.length > 0) {
+        const { data: staffStoresData } = await supabase
+          .from('profiles')
+          .select('display_name, slug')
+          .in('id', staffStoreIds)
+        setEmployedStores(staffStoresData ?? [])
+      }
+
       if (playerData?.is_pro) {
         const { data: offersData } = await supabase
           .from('event_offers')
@@ -108,20 +128,35 @@ export function PlayerProfilePage() {
         setMyUpcomingEvents(upcoming)
       }
 
-      const { data: staffData } = await supabase
-      .from('store_staff')
-      .select('store_id')
-      .eq('player_id', profileData.id)
-      .eq('status', 'active')
+      const { data: scheduleData } = await supabase
+        .from('player_schedule_entries')
+        .select('*')
+        .eq('player_id', profileData.id)
+        .eq('visibility', 'public')
+        .order('start_date', { ascending: true })
+      setUpcomingSchedule(scheduleData ?? [])
 
-      const staffStoreIds = (staffData ?? []).map((s) => s.store_id)
-      if (staffStoreIds.length > 0) {
-        const { data: staffStoresData } = await supabase
-          .from('profiles')
-          .select('display_name, slug')
-          .in('id', staffStoreIds)
-        setEmployedStores(staffStoresData ?? [])
+      // カレンダー用: 公開予定+承諾済みイベントの日付一覧をマージする。
+      const markers: CalendarMarker[] = []
+      for (const entry of scheduleData ?? []) {
+        let cursor = entry.start_date
+        while (cursor <= entry.end_date) {
+          markers.push({ date: cursor, kind: 'schedule' })
+          cursor = addDaysToDateString(cursor, 1)
+        }
       }
+      if (playerData?.is_pro) {
+        const { data: acceptedOffers } = await supabase
+          .from('event_offers')
+          .select('events(event_start_at, event_end_at)')
+          .eq('pro_id', profileData.id)
+          .eq('offer_status', 'accepted')
+        for (const o of acceptedOffers ?? []) {
+          if (!o.events?.event_start_at) continue
+          markers.push({ date: o.events.event_start_at.slice(0, 10), kind: 'event' })
+        }
+      }
+      setCalendarMarkers(markers)
 
       setStatus('ready')
     }
@@ -143,9 +178,11 @@ export function PlayerProfilePage() {
     <PlayerProfileCard
       profile={profile}
       player={player}
-      employedStores={employedStores}
       events={events}
       myUpcomingEvents={myUpcomingEvents}
+      employedStores={employedStores}
+      upcomingSchedule={upcomingSchedule}
+      calendarMarkers={calendarMarkers}
       isOwner={isOwner}
     />
   )

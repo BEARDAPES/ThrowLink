@@ -1,15 +1,19 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
 import { EventListSection, type EventListItem } from './EventListSection'
+import { MonthCalendar, type CalendarMarker } from './MonthCalendar'
 import { getDartsLiveInfo, getPhoenixInfo, DARTSLIVE_COLORS } from '../lib/ratings'
 import { PRO_ONLY_STATUS_TAGS } from '../lib/statusTags'
 import { StarWatchButtons } from './StarWatchButtons'
 import { PlayerManagementMenu } from './PlayerManagementMenu'
+import { parseLocalDate } from '../lib/datetime'
 import type { Database } from '../types/database.types'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type PlayerRow = Database['public']['Tables']['players']['Row']
 type PlayerWithHomeShop = PlayerRow & { home_shop: { display_name: string; slug: string | null } | null }
+type ScheduleEntry = Database['public']['Tables']['player_schedule_entries']['Row']
 
 interface PlayerProfileCardProps {
   profile: Profile
@@ -17,6 +21,8 @@ interface PlayerProfileCardProps {
   events: EventListItem[]
   myUpcomingEvents: EventListItem[]
   employedStores: { display_name: string; slug: string | null }[]
+  upcomingSchedule: ScheduleEntry[]
+  calendarMarkers: CalendarMarker[]
   isOwner?: boolean
 }
 
@@ -64,6 +70,13 @@ function formatShortDateWithWeekday(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}(${weekday})`
 }
 
+function formatDateRange(start: string, end: string): string {
+  const s = parseLocalDate(start)
+  const e = parseLocalDate(end)
+  const fmt = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+  return start === end ? fmt(s) : `${fmt(s)} 〜 ${fmt(e)}`
+}
+
 const DART_RING = `conic-gradient(
   var(--color-cream) 0deg 22.5deg, var(--color-ink-2) 22.5deg 45deg,
   var(--color-cream) 45deg 67.5deg, var(--color-ink-2) 67.5deg 90deg,
@@ -75,10 +88,42 @@ const DART_RING = `conic-gradient(
   var(--color-cream) 315deg 337.5deg, var(--color-ink-2) 337.5deg 360deg
 )`
 
-export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, employedStores, isOwner }: PlayerProfileCardProps) {
+export function PlayerProfileCard({
+  profile,
+  player,
+  events,
+  myUpcomingEvents,
+  employedStores,
+  upcomingSchedule,
+  calendarMarkers,
+  isOwner,
+}: PlayerProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
   const isPro = player?.is_pro ?? false
+
+  const now = new Date()
+  const today = now.toISOString().slice(0, 10)
+  const [calYear, setCalYear] = useState(now.getFullYear())
+  const [calMonth, setCalMonth] = useState(now.getMonth())
+
+  function prevMonth() {
+    if (calMonth === 0) {
+      setCalYear((y) => y - 1)
+      setCalMonth(11)
+    } else {
+      setCalMonth((m) => m - 1)
+    }
+  }
+
+  function nextMonth() {
+    if (calMonth === 11) {
+      setCalYear((y) => y + 1)
+      setCalMonth(0)
+    } else {
+      setCalMonth((m) => m + 1)
+    }
+  }
 
   const nextEvent = [...events]
     .filter((e) => e.status === 'published')
@@ -108,6 +153,40 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, e
         ]
       : []),
   ]
+
+  // カレンダー月連動リスト用: イベント(単日)+自己申告の予定(期間あり)を統合し、
+  // 「表示中の月と、開始〜終了の範囲が重なっているか」で判定する
+  // (開始日だけで判定すると、月をまたぐ予定が正しく出てこないため)。
+  const rawCalendarItems = [
+    ...events
+      .filter((e) => (e.status === 'published' || e.status === 'completed') && e.startAt)
+      .map((e) => {
+        const d = e.startAt!.slice(0, 10)
+        return { key: `evt-${e.id}`, startDate: d, endDate: d, dot: 'bg-brass', dateLabel: formatDateRange(d, d), title: e.title, isPast: e.status === 'completed' }
+      }),
+    ...upcomingSchedule.map((entry) => ({
+      key: `sch-${entry.id}`,
+      startDate: entry.start_date,
+      endDate: entry.end_date,
+      dot: 'bg-dart-red',
+      dateLabel: formatDateRange(entry.start_date, entry.end_date),
+      title: entry.reason ?? '',
+      isPast: entry.end_date < today,
+    })),
+  ]
+
+  console.log('calYear/calMonth:', calYear, calMonth)
+  console.log('rawCalendarItems:', rawCalendarItems)
+
+  const calendarListItems = rawCalendarItems
+    .filter((item) => {
+      const monthStart = new Date(calYear, calMonth, 1)
+      const monthEnd = new Date(calYear, calMonth + 1, 0)
+      const itemStart = parseLocalDate(item.startDate)
+      const itemEnd = parseLocalDate(item.endDate)
+      return itemStart <= monthEnd && itemEnd >= monthStart
+    })
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
 
   return (
     <div className="min-h-screen bg-ink font-tl-sans flex justify-center px-6 py-16 sm:py-24">
@@ -300,7 +379,85 @@ export function PlayerProfileCard({ profile, player, events, myUpcomingEvents, e
           </div>
         )}
 
-        {isPro && <EventListSection events={events} />}
+        {(calendarMarkers.length > 0 || upcomingSchedule.length > 0 || events.length > 0) && (
+          <div className="mb-10">
+            <MonthCalendar markers={calendarMarkers} year={calYear} month={calMonth} onPrevMonth={prevMonth} onNextMonth={nextMonth} />
+            <div className="mt-4 space-y-2">
+              {calendarListItems.map((item) => (
+                <div key={item.key} className="flex items-center gap-2 py-2 border-b border-brass/20">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.dot}`} />
+                  <span className="font-tl-mono text-xs text-chalk-dim shrink-0">{item.dateLabel}</span>
+                  <span className="text-chalk text-sm truncate flex-1">{item.title}</span>
+                  <span
+                    className={`font-tl-mono text-[9px] shrink-0 px-1.5 py-0.5 rounded-sm ${
+                      item.isPast ? 'text-chalk-dim border border-brass/40' : 'text-ink bg-safe-green'
+                    }`}
+                  >
+                    {item.isPast ? 'END' : 'UPCOMING'}
+                  </span>
+                </div>
+              ))}
+              {calendarListItems.length === 0 && <p className="text-xs text-chalk-dim">この月の予定はありません。</p>}
+            </div>
+          </div>
+        )}
+
+        {isPro &&
+          (() => {
+            const scheduleItems = [
+              ...events
+                .filter((e) => e.status === 'published' && e.startAt)
+                .map((e) => ({
+                  key: `evt-${e.id}`,
+                  sortDate: e.startAt!.slice(0, 10),
+                  dateLabel: formatDateRange(e.startAt!.slice(0, 10), e.startAt!.slice(0, 10)),
+                  title: e.title,
+                  venue: e.venue,
+                  href: `/events/${e.id}`,
+                })),
+              ...upcomingSchedule
+                .filter((entry) => entry.end_date >= today)
+                .map((entry) => ({
+                  key: `sch-${entry.id}`,
+                  sortDate: entry.start_date,
+                  dateLabel: formatDateRange(entry.start_date, entry.end_date),
+                  title: entry.reason || '予定あり',
+                  venue: undefined as string | undefined,
+                  href: undefined as string | undefined,
+                })),
+            ].sort((a, b) => a.sortDate.localeCompare(b.sortDate))
+
+            if (scheduleItems.length === 0) return null
+
+            return (
+              <div className="mb-10">
+                <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">スケジュール</p>
+                <div>
+                  {scheduleItems.map((item) =>
+                    item.href ? (
+                      <Link
+                        key={item.key}
+                        to={item.href}
+                        className="flex items-center justify-between gap-2.5 py-3 px-2.5 -mx-2.5 rounded-sm border-b border-brass/20 hover:bg-ink-2 transition-colors group"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-tl-mono text-xs text-chalk-dim tracking-wide">{item.dateLabel}</div>
+                          <div className="text-chalk text-sm mt-0.5 truncate">{item.title}</div>
+                          {item.venue && <div className="font-tl-mono text-xs text-chalk-dim mt-0.5 truncate">{item.venue}</div>}
+                        </div>
+                        <span className="text-brass text-lg shrink-0 group-hover:text-dart-red transition-colors">›</span>
+                      </Link>
+                    ) : (
+                      <div key={item.key} className="py-3 border-b border-brass/20">
+                        <div className="font-tl-mono text-xs text-chalk-dim tracking-wide">{item.dateLabel}</div>
+                        <div className="text-chalk text-sm mt-0.5">{item.title}</div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            )
+          })()}
 
         {isOwner && myUpcomingEvents.length > 0 && (
           <div className="mb-10">
