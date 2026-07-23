@@ -26,9 +26,6 @@ function sameInstant(a: string | null, b: string | null): boolean {
   return new Date(a).getTime() === new Date(b).getTime()
 }
 
-// storeが登録している単価設定(イベント単位 or 時間単価)から、
-// このオファーにおける金額の初期提案値を計算する。
-// 時間単価の場合は、イベントの開始〜終了時間から自動算出する。
 function computeSuggestedPrice(
   pricingType: string | null,
   amount: number | null,
@@ -78,6 +75,8 @@ export function OfferPanel({
   const [composeMessage, setComposeMessage] = useState('')
   const [changeReason, setChangeReason] = useState('')
   const [savingChange, setSavingChange] = useState(false)
+  const [isAvailable, setIsAvailable] = useState(true)
+  const [dateWarning, setDateWarning] = useState<string | null>(null)
 
   const startInit = splitIso(offer.participation_start_at ?? eventStartAt)
   const endInit = splitIso(offer.participation_end_at ?? eventEndAt)
@@ -93,6 +92,9 @@ export function OfferPanel({
   const [endHour, setEndHour] = useState(endInit.hour || '22')
   const [endMinute, setEndMinute] = useState(endInit.minute || '00')
 
+  const eventMinDate = eventStartAt ? splitIso(eventStartAt).date : ''
+  const eventMaxDate = eventEndAt ? splitIso(eventEndAt).date : ''
+
   async function loadThread() {
     const { data } = await supabase
       .from('offer_thread_items')
@@ -107,7 +109,32 @@ export function OfferPanel({
     loadThread()
   }, [offer.event_id, offer.pro_id, offer.offer_status])
 
+  // 日程を入力するたびに、この日程でプロが実際に空いているか確認する。
+  useEffect(() => {
+    async function checkAvailability() {
+      const startIso = combineToIso(startDate, startHour, startMinute)
+      const endIso = combineToIso(endDate, endHour, endMinute)
+      if (!startIso || !endIso) {
+        setIsAvailable(true)
+        return
+      }
+      const { data, error } = await supabase.rpc('player_is_available', {
+        target_player_id: offer.pro_id,
+        range_start: startIso,
+        range_end: endIso,
+        exclude_event_id: offer.event_id,
+      })
+      if (!error) setIsAvailable(data ?? true)
+    }
+    checkAvailability()
+  }, [offer.pro_id, offer.event_id, startDate, startHour, startMinute, endDate, endHour, endMinute])
+
   function setStart(date: string, hour: string, minute: string) {
+    if (eventMinDate && eventMaxDate && date && (date < eventMinDate || date > eventMaxDate)) {
+      setDateWarning(`参加開始日は、イベントの開催期間(${eventMinDate} 〜 ${eventMaxDate})の範囲内で指定してください。`)
+      return
+    }
+    setDateWarning(null)
     setStartDate(date)
     setStartHour(hour)
     setStartMinute(minute)
@@ -115,6 +142,11 @@ export function OfferPanel({
   }
 
   function setEnd(date: string, hour: string, minute: string) {
+    if (eventMinDate && eventMaxDate && date && (date < eventMinDate || date > eventMaxDate)) {
+      setDateWarning(`参加終了日は、イベントの開催期間(${eventMinDate} 〜 ${eventMaxDate})の範囲内で指定してください。`)
+      return
+    }
+    setDateWarning(null)
     setEndDate(date)
     setEndHour(hour)
     setEndMinute(minute)
@@ -122,7 +154,7 @@ export function OfferPanel({
   }
 
   const conditionsReady = price.trim() !== '' && startDate !== '' && endDate !== ''
-  const canSend = conditionsReady && composeMessage.trim() !== ''
+  const canSend = conditionsReady && composeMessage.trim() !== '' && isAvailable
 
   const currentPriceNum = price ? Number(price) : null
   const currentStartIso = combineToIso(startDate, startHour, startMinute)
@@ -263,6 +295,14 @@ export function OfferPanel({
               <TimeSelect hour={endHour} minute={endMinute} onChange={(h, m) => setEnd(endDate, h, m)} />
             </div>
           </div>
+          {dateWarning && (
+            <p className="text-xs text-dart-red bg-dart-red/10 border border-dart-red/30 rounded-sm px-3 py-2">{dateWarning}</p>
+          )}
+          {!isAvailable && startDate && endDate && (
+            <p className="text-xs text-dart-red bg-dart-red/10 border border-dart-red/30 rounded-sm px-3 py-2">
+              この日程は既に埋まっています。別の日程を指定してください。
+            </p>
+          )}
           <div>
             <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1">オファーメッセージ</label>
             <textarea value={composeMessage} onChange={(e) => setComposeMessage(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
@@ -275,7 +315,7 @@ export function OfferPanel({
           >
             {sendingOffer ? '送信中...' : 'オファーを送信する'}
           </button>
-          {!canSend && <p className="text-xs text-chalk-dim">金額・参加時間帯・メッセージがすべて揃うと送信できます。</p>}
+          {!canSend && isAvailable && <p className="text-xs text-chalk-dim">金額・参加時間帯・メッセージがすべて揃うと送信できます。</p>}
         </div>
       ) : (
         <>
@@ -302,6 +342,14 @@ export function OfferPanel({
                   <input type="date" value={endDate} onChange={(e) => setEnd(e.target.value, endHour, endMinute)} className={inputClass} />
                   <TimeSelect hour={endHour} minute={endMinute} onChange={(h, m) => setEnd(endDate, h, m)} />
                 </div>
+                {dateWarning && (
+                  <p className="text-xs text-dart-red bg-dart-red/10 border border-dart-red/30 rounded-sm px-3 py-2">{dateWarning}</p>
+                )}
+                {!isAvailable && (
+                  <p className="text-xs text-dart-red bg-dart-red/10 border border-dart-red/30 rounded-sm px-3 py-2">
+                    この日程は既に埋まっています。別の日程を指定してください。
+                  </p>
+                )}
                 <div>
                   <label className="block font-tl-mono text-xs text-chalk-dim tracking-wide mb-1">変更理由(プレイヤーに送信されます)</label>
                   <textarea value={changeReason} onChange={(e) => setChangeReason(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
@@ -309,12 +357,12 @@ export function OfferPanel({
                 <button
                   type="button"
                   onClick={submitConditionChange}
-                  disabled={!changeReason.trim() || !hasConditionChanged || savingChange}
+                  disabled={!changeReason.trim() || !hasConditionChanged || !isAvailable || savingChange}
                   className="font-tl-mono text-xs font-semibold text-ink bg-dart-red px-3 py-2 rounded-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {savingChange ? '送信中...' : 'オファー内容を変更する'}
                 </button>
-                {changeReason.trim() && !hasConditionChanged && (
+                {changeReason.trim() && !hasConditionChanged && isAvailable && (
                   <p className="text-xs text-chalk-dim">オファー内容が変更されていません。金額または参加時間帯を変えると送信できます。</p>
                 )}
               </div>

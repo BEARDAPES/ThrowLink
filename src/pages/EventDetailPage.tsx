@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { OfferPanel } from '../components/OfferPanel'
@@ -16,6 +16,7 @@ type OfferRow = Database['public']['Tables']['event_offers']['Row'] & {
   profiles: { display_name: string; slug: string | null } | null
 }
 type OfferConditions = { pricing_type: string | null; unit_price_amount: number | null }
+type ProCandidate = { id: string; display_name: string }
 
 const inputClass =
   'w-full bg-ink-2 border border-brass/50 rounded-sm px-3 py-2 text-chalk font-tl-sans focus:outline-none focus:border-dart-red transition-colors'
@@ -49,12 +50,15 @@ export function EventDetailPage() {
   const [dateError, setDateError] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<{ id: string; display_name: string }[]>([])
+  const [results, setResults] = useState<ProCandidate[]>([])
+  const [candidateError, setCandidateError] = useState<string | null>(null)
 
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false)
   const [apologyMessage, setApologyMessage] = useState(DEFAULT_APOLOGY)
+
+  const offerRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   async function load() {
     if (!id) return
@@ -111,8 +115,6 @@ export function EventDetailPage() {
       )
     }
 
-    // 参加予定者(確定・キャンセル待ち)は、公開/終了済みイベントであれば
-    // 誰でも見られる(RLS側も同じ条件で許可している)。
     const { data: attendeesData } = await supabase
       .from('reservations')
       .select('user_id, status, profiles(display_name, avatar_url, slug, players(is_pro))')
@@ -209,8 +211,23 @@ export function EventDetailPage() {
     await load()
   }
 
-  async function addCandidate(candidate: { id: string }) {
-    if (!id) return
+  // 候補追加時に、イベントの開催期間と重なる予定が既に無いか確認してからブロックする。
+  async function addCandidate(candidate: { id: string; display_name: string }) {
+    if (!id || !event) return
+
+    if (event.event_start_at && event.event_end_at) {
+      const { data: available } = await supabase.rpc('player_is_available', {
+        target_player_id: candidate.id,
+        range_start: event.event_start_at,
+        range_end: event.event_end_at,
+      })
+      if (available === false) {
+        setCandidateError(`${candidate.display_name}さんは、この日程では既に予定が埋まっています。`)
+        return
+      }
+    }
+    setCandidateError(null)
+
     const existing = offers.find((o) => o.pro_id === candidate.id)
     if (existing) {
       await supabase.from('event_offers').update({ offer_status: 'candidate' }).eq('event_id', id).eq('pro_id', candidate.id)
@@ -220,6 +237,9 @@ export function EventDetailPage() {
     setQuery('')
     setResults([])
     await load()
+    requestAnimationFrame(() => {
+      offerRefs.current[candidate.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
   }
 
   async function withdrawOffer(offer: OfferRow) {
@@ -452,7 +472,7 @@ export function EventDetailPage() {
           attendees={attendees}
           offeredProIds={offeredProIds}
           canOffer={isOwner && !isCancelled}
-          onOffer={(attendee) => addCandidate({ id: attendee.id })}
+          onOffer={(attendee) => addCandidate({ id: attendee.id, display_name: attendee.displayName })}
         />
 
         {isOwner && !isNew && !isCancelled && (
@@ -462,19 +482,20 @@ export function EventDetailPage() {
             {offers.length > 0 && (
               <div className="space-y-2">
                 {offers.map((offer) => (
-                  <OfferPanel
-                    key={offer.pro_id}
-                    offer={offer}
-                    proName={offer.profiles?.display_name ?? ''}
-                    storeId={event?.store_id ?? ''}
-                    eventStatus={event?.status ?? 'draft'}
-                    defaultPricingType={offerConditionsByPro[offer.pro_id]?.pricing_type ?? null}
-                    defaultUnitPriceAmount={offerConditionsByPro[offer.pro_id]?.unit_price_amount ?? null}
-                    eventStartAt={event?.event_start_at ?? null}
-                    eventEndAt={event?.event_end_at ?? null}
-                    onChanged={load}
-                    onWithdraw={() => withdrawOffer(offer)}
-                  />
+                  <div key={offer.pro_id} ref={(el) => { offerRefs.current[offer.pro_id] = el }}>
+                    <OfferPanel
+                      offer={offer}
+                      proName={offer.profiles?.display_name ?? ''}
+                      storeId={event?.store_id ?? ''}
+                      eventStatus={event?.status ?? 'draft'}
+                      defaultPricingType={offerConditionsByPro[offer.pro_id]?.pricing_type ?? null}
+                      defaultUnitPriceAmount={offerConditionsByPro[offer.pro_id]?.unit_price_amount ?? null}
+                      eventStartAt={event?.event_start_at ?? null}
+                      eventEndAt={event?.event_end_at ?? null}
+                      onChanged={load}
+                      onWithdraw={() => withdrawOffer(offer)}
+                    />
+                  </div>
                 ))}
               </div>
             )}
@@ -483,12 +504,20 @@ export function EventDetailPage() {
             {results.length > 0 && (
               <div className="border border-brass/50 rounded-sm divide-y divide-brass/20">
                 {results.map((candidate) => (
-                  <button key={candidate.id} type="button" onClick={() => addCandidate(candidate)} className="w-full flex items-center justify-between px-3 py-2 text-sm text-chalk hover:bg-ink-2 transition-colors">
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    onClick={() => addCandidate({ id: candidate.id, display_name: candidate.display_name })}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-chalk hover:bg-ink-2 transition-colors"
+                  >
                     <span>{candidate.display_name}</span>
                     <span className="font-tl-mono text-xs text-chalk-dim">候補に追加</span>
                   </button>
                 ))}
               </div>
+            )}
+            {candidateError && (
+              <p className="text-xs text-dart-red bg-dart-red/10 border border-dart-red/30 rounded-sm px-3 py-2">{candidateError}</p>
             )}
           </div>
         )}
