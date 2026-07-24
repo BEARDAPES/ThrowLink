@@ -98,6 +98,10 @@ const TAB_LABELS: Record<TabKey, string> = {
   sns: 'SNS',
 }
 
+// タブジャンプ時の着地位置と、スクロール終端の位置、両方で共有する余白。
+// 値を変えたいときはここ1箇所だけ直せばよい。
+const TAB_JUMP_OFFSET = 24
+
 export function StoreProfileCard({ profile, store, events, staff, isOwner }: StoreProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
@@ -115,6 +119,7 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
     ...(hasStaffSection ? (['staff'] as const) : []),
     ...(hasSnsSection ? (['sns'] as const) : []),
   ]
+  const lastTabKey = availableTabs[availableTabs.length - 1]
 
   const now = new Date()
 
@@ -131,7 +136,6 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
   const [staffMarkers, setStaffMarkers] = useState<CalendarMarker[]>([])
   const [navbarHeight, setNavbarHeight] = useState(66)
   const [stickyHeaderHeight, setStickyHeaderHeight] = useState(150)
-  const [bottomSpacerHeight, setBottomSpacerHeight] = useState(0)
 
   useEffect(() => {
     async function loadStaffSchedule() {
@@ -211,13 +215,6 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
     function onScroll() {
       setCondensedTitleVisible(window.scrollY >= stickThreshold - 1)
 
-      const lastTab = availableTabs[availableTabs.length - 1]
-      const lastEl = lastTab ? sectionRefs[lastTab].current : null
-      if (lastEl) {
-        const lastSectionHeight = lastEl.getBoundingClientRect().height
-        setBottomSpacerHeight(Math.max(0, window.innerHeight - headerHeight - lastSectionHeight))
-      }
-
       const spyPoint = condensedBar!.getBoundingClientRect().bottom
       let current: TabKey | null = null
       for (const key of availableTabs) {
@@ -234,7 +231,7 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
   }, [availableTabs.join(',')])
 
   return (
-    <div className="font-tl-sans px-6 pt-10 pb-24 sm:pt-14">
+    <div className="font-tl-sans px-6 pt-10 sm:pt-14">
       <div className="w-full max-w-[560px] mx-auto">
         <div className="animate-tl-rise text-left">
           <div className="flex justify-end items-center gap-2 mb-5">
@@ -390,7 +387,15 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
 
         <div className="pt-8 text-left">
           {hasInfoSection && (
-            <div id="info" ref={sectionRefs.info} className="mb-10" style={{ scrollMarginTop: stickyHeaderHeight + 24 }}>
+            <div
+              id="info"
+              ref={sectionRefs.info}
+              className="mb-10"
+              style={{
+                scrollMarginTop: stickyHeaderHeight + TAB_JUMP_OFFSET,
+                ...(lastTabKey === 'info' ? { minHeight: `calc(100vh - ${stickyHeaderHeight + TAB_JUMP_OFFSET}px)` } : {}),
+              }}
+            >
               <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">店舗情報</p>
               <div className="space-y-3.5">
                 {store?.address && (
@@ -443,7 +448,15 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
           )}
 
           {hasEventsSection && (
-            <div id="events" ref={sectionRefs.events} className="mb-10" style={{ scrollMarginTop: stickyHeaderHeight + 24 }}>
+            <div
+              id="events"
+              ref={sectionRefs.events}
+              className="mb-10"
+              style={{
+                scrollMarginTop: stickyHeaderHeight + TAB_JUMP_OFFSET,
+                ...(lastTabKey === 'events' ? { minHeight: `calc(100vh - ${stickyHeaderHeight + TAB_JUMP_OFFSET}px)` } : {}),
+              }}
+            >
               <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">イベントカレンダー</p>
               <MonthCalendar
                 markers={eventMarkers}
@@ -472,7 +485,15 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
           )}
 
           {hasStaffSection && (
-            <div id="staff" ref={sectionRefs.staff} className="mb-10" style={{ scrollMarginTop: stickyHeaderHeight + 24 }}>
+            <div
+              id="staff"
+              ref={sectionRefs.staff}
+              className="mb-10"
+              style={{
+                scrollMarginTop: stickyHeaderHeight + TAB_JUMP_OFFSET,
+                ...(lastTabKey === 'staff' ? { minHeight: `calc(100vh - ${stickyHeaderHeight + TAB_JUMP_OFFSET}px)` } : {}),
+              }}
+            >
               <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">スタッフ稼働カレンダー</p>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {staff.map((s) => (
@@ -527,7 +548,15 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
           )}
 
           {hasSnsSection && (
-            <div id="sns" ref={sectionRefs.sns} className="mb-10" style={{ scrollMarginTop: stickyHeaderHeight + 24 }}>
+            <div
+              id="sns"
+              ref={sectionRefs.sns}
+              className="mb-10"
+              style={{
+                scrollMarginTop: stickyHeaderHeight + TAB_JUMP_OFFSET,
+                ...(lastTabKey === 'sns' ? { minHeight: `calc(100vh - ${stickyHeaderHeight + TAB_JUMP_OFFSET}px)` } : {}),
+              }}
+            >
               <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">SNS</p>
               <div className="border-t border-brass/35">
                 {snsLinks.map((link) => (
@@ -550,7 +579,6 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
           )}
         </div>
       </div>
-      <div style={{ height: bottomSpacerHeight }} />
     </div>
   )
 }
