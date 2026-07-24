@@ -300,7 +300,7 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner, myAff
     onScroll()
     return () => window.removeEventListener('scroll', onScroll)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableTabs.join(',')])
+  }, [availableTabs.join(','), Object.keys(presentStaffInfo).length])
 
   return (
     <div className="font-tl-sans px-6 pt-10 sm:pt-14">
@@ -425,7 +425,7 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner, myAff
           {Object.keys(presentStaffInfo).length > 0 && (
             <div className="border border-safe-green/60 rounded-sm px-3 py-2 mb-5">
               <p className="font-tl-mono text-[9px] text-safe-green tracking-wide mb-1.5">本日出勤中のスタッフ</p>
-              <div className="flex flex-wrap gap-2.5">
+              <div className="space-y-2">
                 {staff
                   .filter((s) => presentStaffInfo[s.id])
                   .map((s) => {
