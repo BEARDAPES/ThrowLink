@@ -3,8 +3,16 @@ import { Link } from 'react-router'
 
 const menuItemClass = 'block px-4 py-2.5 text-sm text-chalk hover:bg-ink hover:text-dart-red transition-colors'
 
-export function StoreManagementMenu() {
+interface StoreManagementMenuProps {
+  slug: string
+  canManageStore: boolean
+  canAccessShifts: boolean
+}
+
+export function StoreManagementMenu({ slug, canManageStore, canAccessShifts }: StoreManagementMenuProps) {
   const [open, setOpen] = useState(false)
+
+  if (!canManageStore && !canAccessShifts) return null
 
   return (
     <div className="relative">
@@ -25,12 +33,21 @@ export function StoreManagementMenu() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-10 z-50 w-48 bg-ink-2 border border-brass/40 rounded-sm shadow-xl overflow-hidden">
-            <Link to="/me/dashboard" onClick={() => setOpen(false)} className={menuItemClass}>
-              依頼・イベント管理
-            </Link>
-            <Link to="/me/staff" onClick={() => setOpen(false)} className={menuItemClass}>
-              スタッフ管理
-            </Link>
+            {canManageStore && (
+              <>
+                <Link to="/me/dashboard" onClick={() => setOpen(false)} className={menuItemClass}>
+                  依頼・イベント管理
+                </Link>
+                <Link to="/me/staff" onClick={() => setOpen(false)} className={menuItemClass}>
+                  スタッフ管理
+                </Link>
+              </>
+            )}
+            {canAccessShifts && (
+              <Link to={`/stores/${slug}/shifts`} onClick={() => setOpen(false)} className={menuItemClass}>
+                シフト管理
+              </Link>
+            )}
           </div>
         </>
       )}

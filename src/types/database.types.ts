@@ -641,44 +641,57 @@ export type Database = {
           },
         ]
       }
-      store_staff_shifts: {
+      store_staff_shift_entries: {
         Row: {
           created_at: string
-          end_time: string | null
+          date: string
+          end_time: string
           id: string
           player_id: string
-          start_time: string | null
-          status: string
+          start_time: string
           store_id: string
-          weekday: number
+          updated_at: string
+          updated_by: string
+          visibility: string
         }
         Insert: {
           created_at?: string
-          end_time?: string | null
+          date: string
+          end_time: string
           id?: string
           player_id: string
-          start_time?: string | null
-          status: string
+          start_time: string
           store_id: string
-          weekday: number
+          updated_at?: string
+          updated_by: string
+          visibility?: string
         }
         Update: {
           created_at?: string
-          end_time?: string | null
+          date?: string
+          end_time?: string
           id?: string
           player_id?: string
-          start_time?: string | null
-          status?: string
+          start_time?: string
           store_id?: string
-          weekday?: number
+          updated_at?: string
+          updated_by?: string
+          visibility?: string
         }
         Relationships: [
           {
-            foreignKeyName: "store_staff_shifts_store_id_player_id_fkey"
+            foreignKeyName: "store_staff_shift_entries_store_id_player_id_fkey"
             columns: ["store_id", "player_id"]
             isOneToOne: false
             referencedRelation: "store_staff"
             referencedColumns: ["store_id", "player_id"]
+          },
+          {
+            foreignKeyName: "store_staff_shift_entries_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -751,6 +764,7 @@ export type Database = {
         }[]
       }
       get_fallback_clock_out_hours: { Args: never; Returns: number }
+      is_pro_player: { Args: { target_player_id: string }; Returns: boolean }
       player_is_available: {
         Args: {
           exclude_event_id?: string

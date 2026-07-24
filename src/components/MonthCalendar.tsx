@@ -1,6 +1,6 @@
 export interface CalendarMarker {
   date: string // 'YYYY-MM-DD'
-  kind: 'schedule' | 'event'
+  kind: 'schedule' | 'event' | 'shift'
 }
 
 interface MonthCalendarProps {
@@ -23,7 +23,7 @@ export function MonthCalendar({ markers, year, month, onPrevMonth, onNextMonth }
   const now = new Date()
   const todayKey = toDateKey(now.getFullYear(), now.getMonth(), now.getDate())
 
-  const markersByDate = new Map<string, Set<'schedule' | 'event'>>()
+  const markersByDate = new Map<string, Set<'schedule' | 'event' | 'shift'>>()
   for (const m of markers) {
     if (!markersByDate.has(m.date)) markersByDate.set(m.date, new Set())
     markersByDate.get(m.date)!.add(m.kind)
@@ -42,10 +42,6 @@ export function MonthCalendar({ markers, year, month, onPrevMonth, onNextMonth }
     cells.push({ key: toDateKey(year, month, d), day: d, faded: false })
   }
   let nextDay = 1
-  while (cells.length % 7 !== 0) {
-    cells.push({ key: toDateKey(year, month + 1, nextDay), day: nextDay, faded: true })
-    nextDay++
-  }
   while (cells.length < 42) {
     cells.push({ key: toDateKey(year, month + 1, nextDay), day: nextDay, faded: true })
     nextDay++
@@ -72,6 +68,8 @@ export function MonthCalendar({ markers, year, month, onPrevMonth, onNextMonth }
           const kinds = markersByDate.get(cell.key)
           const hasSchedule = kinds?.has('schedule')
           const hasEvent = kinds?.has('event')
+          const hasShift = kinds?.has('shift')
+          const hasAny = hasSchedule || hasEvent || hasShift
           const isToday = cell.key === todayKey
           return (
             <div
@@ -79,14 +77,15 @@ export function MonthCalendar({ markers, year, month, onPrevMonth, onNextMonth }
               className={`h-[26px] flex items-center justify-center font-tl-mono text-[10.5px] rounded-sm relative ${
                 cell.faded ? 'opacity-25' : ''
               } ${isToday ? 'border border-brass text-chalk' : 'text-chalk-dim'} ${
-                hasSchedule || hasEvent ? 'bg-dart-red/15 text-chalk' : ''
+                hasAny ? 'bg-ink-2 text-chalk' : ''
               }`}
             >
               {cell.day}
-              {(hasSchedule || hasEvent) && (
+              {hasAny && (
                 <span className="absolute bottom-[2px] flex gap-[2px]">
-                  {hasSchedule && <span className="w-[3px] h-[3px] rounded-full bg-dart-red" />}
                   {hasEvent && <span className="w-[3px] h-[3px] rounded-full bg-brass" />}
+                  {hasShift && <span className="w-[3px] h-[3px] rounded-full bg-safe-green" />}
+                  {hasSchedule && <span className="w-[3px] h-[3px] rounded-full bg-dart-red" />}
                 </span>
               )}
             </div>

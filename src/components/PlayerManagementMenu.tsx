@@ -34,9 +34,11 @@ export function PlayerManagementMenu({ isPro }: PlayerManagementMenuProps) {
                 オファー一覧
               </Link>
             )}
-            <Link to="/me/schedule" onClick={() => setOpen(false)} className={menuItemClass}>
-              予定管理
-            </Link>
+            {isPro && (
+              <Link to="/me/schedule" onClick={() => setOpen(false)} className={menuItemClass}>
+                予定管理
+              </Link>
+            )}
           </div>
         </>
       )}

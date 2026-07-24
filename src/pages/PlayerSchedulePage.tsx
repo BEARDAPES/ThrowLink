@@ -131,6 +131,12 @@ export function PlayerSchedulePage() {
     }
     setPlayerId(user.id)
 
+    const { data: playerData } = await supabase.from('players').select('is_pro').eq('id', user.id).maybeSingle()
+    if (!playerData?.is_pro) {
+      navigate('/me')
+      return
+    }
+
     const { data } = await supabase
       .from('player_schedule_entries')
       .select('*')

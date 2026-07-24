@@ -18,6 +18,7 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { StoreStaffPage } from './pages/StoreStaffPage'
 import { PlayerStaffInvitationsPage } from './pages/PlayerStaffInvitationsPage'
 import { PlayerSchedulePage } from './pages/PlayerSchedulePage'
+import { StoreShiftsPage } from './pages/StoreShiftsPage'
 
 export const router = createBrowserRouter([
   {
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
       { path: '/me/staff', element: <StoreStaffPage /> },
       { path: '/me/staff-invitations', element: <PlayerStaffInvitationsPage /> },
       { path: '/me/schedule', element: <PlayerSchedulePage /> },
+      { path: '/stores/:slug/shifts', element: <StoreShiftsPage /> },
     ],
   },
 ])
