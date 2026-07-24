@@ -17,6 +17,7 @@ interface AttendanceState {
 interface AttendanceControlsProps {
   playerId: string
   stores: StoreAffiliation[]
+  onChange?: () => void
 }
 
 function formatTime(t: string | null): string {
@@ -24,7 +25,7 @@ function formatTime(t: string | null): string {
   return t.slice(0, 5)
 }
 
-export function AttendanceControls({ playerId, stores }: AttendanceControlsProps) {
+export function AttendanceControls({ playerId, stores, onChange }: AttendanceControlsProps) {
   const [attendance, setAttendance] = useState<Record<string, AttendanceState>>({})
   const [status, setStatus] = useState<'loading' | 'ready'>('loading')
   const [pendingClockIn, setPendingClockIn] = useState<StoreAffiliation | null>(null)
@@ -84,11 +85,13 @@ export function AttendanceControls({ playerId, stores }: AttendanceControlsProps
     setPendingClockIn(null)
     setConflictReason(null)
     await load()
+    onChange?.()
   }
 
   async function doClockOut(store: StoreAffiliation) {
     await clockOut(store.storeId, playerId)
     await load()
+    onChange?.()
   }
 
   if (status === 'loading') return null

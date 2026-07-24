@@ -327,7 +327,7 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner, myAff
 
           {myAffiliation && viewerId && (
             <div className="mb-5">
-              <AttendanceControls playerId={viewerId} stores={[myAffiliation]} />
+              <AttendanceControls playerId={viewerId} stores={[myAffiliation]} onChange={loadPresentStaff} />
             </div>
           )}
 
