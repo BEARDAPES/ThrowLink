@@ -5,7 +5,9 @@ import { EventListSection, type EventListItem } from './EventListSection'
 import { StarWatchButtons } from './StarWatchButtons'
 import { StoreManagementMenu } from './StoreManagementMenu'
 import { MonthCalendar, type CalendarMarker } from './MonthCalendar'
+import { AttendanceControls, type StoreAffiliation } from './AttendanceControls'
 import { supabase } from '../lib/supabase'
+import { clockIn, clockOut } from '../lib/attendance'
 import { addDaysToDateString, parseLocalDate } from '../lib/datetime'
 import type { Database } from '../types/database.types'
 
@@ -21,12 +23,20 @@ export interface StaffMember {
   isPro: boolean
 }
 
+interface PresentStaffInfo {
+  source: 'attendance' | 'event'
+  untilTime: string | null
+}
+
 interface StoreProfileCardProps {
   profile: Profile
   store: StoreRow | null
   events: EventListItem[]
   staff: StaffMember[]
   isOwner?: boolean
+  myAffiliation: StoreAffiliation | null
+  viewerId: string | null
+  viewerIsAdmin: boolean
 }
 
 type SnsLink = { platform: string; url: string }
@@ -102,7 +112,7 @@ const TAB_LABELS: Record<TabKey, string> = {
 // 値を変えたいときはここ1箇所だけ直せばよい。
 const TAB_JUMP_OFFSET = 24
 
-export function StoreProfileCard({ profile, store, events, staff, isOwner }: StoreProfileCardProps) {
+export function StoreProfileCard({ profile, store, events, staff, isOwner, myAffiliation, viewerId, viewerIsAdmin }: StoreProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
   const atmosphereTags = Array.isArray(store?.atmosphere_tags) ? (store.atmosphere_tags as string[]) : []
@@ -136,6 +146,7 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
   const [staffMarkers, setStaffMarkers] = useState<CalendarMarker[]>([])
   const [navbarHeight, setNavbarHeight] = useState(66)
   const [stickyHeaderHeight, setStickyHeaderHeight] = useState(150)
+  const [presentStaffInfo, setPresentStaffInfo] = useState<Record<string, PresentStaffInfo>>({})
 
   useEffect(() => {
     async function loadStaffSchedule() {
@@ -164,6 +175,71 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
     }
     loadStaffSchedule()
   }, [selectedStaffId])
+
+  async function loadPresentStaff() {
+    if (staff.length === 0) return
+    const staffIds = staff.map((s) => s.id)
+    const nowIso = new Date().toISOString()
+
+    const { data: attendanceRows } = await supabase
+      .from('store_staff_attendance_logs')
+      .select('player_id')
+      .eq('store_id', profile.id)
+      .in('player_id', staffIds)
+      .is('clocked_out_at', null)
+
+    const { data: acceptedOffers } = await supabase
+      .from('event_offers')
+      .select('pro_id, event_id')
+      .in('pro_id', staffIds)
+      .eq('offer_status', 'accepted')
+
+    const eventIds = (acceptedOffers ?? []).map((o) => o.event_id)
+    const ongoingEndTimeByProId: Record<string, string> = {}
+
+    if (eventIds.length > 0) {
+      const { data: eventsData } = await supabase
+        .from('events')
+        .select('id, event_end_at')
+        .in('id', eventIds)
+        .eq('store_id', profile.id)
+        .lte('event_start_at', nowIso)
+        .gte('event_end_at', nowIso)
+
+      const endTimeByEventId = Object.fromEntries((eventsData ?? []).map((e) => [e.id, e.event_end_at]))
+      for (const offer of acceptedOffers ?? []) {
+        const endTime = endTimeByEventId[offer.event_id]
+        if (endTime) {
+          ongoingEndTimeByProId[offer.pro_id] = endTime
+        }
+      }
+    }
+
+    const info: Record<string, PresentStaffInfo> = {}
+    for (const [proId, endTime] of Object.entries(ongoingEndTimeByProId)) {
+      info[proId] = { source: 'event', untilTime: endTime }
+    }
+    for (const row of attendanceRows ?? []) {
+      if (!info[row.player_id]) {
+        info[row.player_id] = { source: 'attendance', untilTime: null }
+      }
+    }
+    setPresentStaffInfo(info)
+  }
+
+  useEffect(() => {
+    loadPresentStaff()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staff, profile.id])
+
+  async function toggleStaffAttendance(staffId: string) {
+    if (presentStaffInfo[staffId]) {
+      await clockOut(profile.id, staffId)
+    } else {
+      await clockIn(profile.id, staffId)
+    }
+    await loadPresentStaff()
+  }
 
   const eventListItems = events
     .filter((e) => (e.status === 'published' || e.status === 'completed') && e.startAt)
@@ -203,10 +279,6 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
 
     const stickThreshold = condensedBar.offsetTop - measuredNavbarHeight
 
-    // ヘッダーの最終的な高さ(小タイトル展開時)を、決め打ちの数値ではなく
-    // 実測で求める。scrollHeightはmax-heightによるクリップの影響を受けない
-    // ため、「展開したら何pxになるか」を正確に取得できる。CSS側の余白や
-    // サイズを変更しても、ここを直し忘れる心配が無くなる。
     const collapsedHeaderHeight = condensedBar.getBoundingClientRect().height
     const titleRowExpandedHeight = titleRow.scrollHeight
     const headerHeight = measuredNavbarHeight + collapsedHeaderHeight + titleRowExpandedHeight
@@ -252,6 +324,12 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
               </>
             )}
           </div>
+
+          {myAffiliation && viewerId && (
+            <div className="mb-5">
+              <AttendanceControls playerId={viewerId} stores={[myAffiliation]} />
+            </div>
+          )}
 
           <div className="flex gap-4 items-start mb-3.5">
             <div
@@ -343,6 +421,39 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
               )}
             </div>
           </div>
+
+          {Object.keys(presentStaffInfo).length > 0 && (
+            <div className="border border-safe-green/60 rounded-sm px-3 py-2 mb-5">
+              <p className="font-tl-mono text-[9px] text-safe-green tracking-wide mb-1.5">本日出勤中のスタッフ</p>
+              <div className="flex flex-wrap gap-2.5">
+                {staff
+                  .filter((s) => presentStaffInfo[s.id])
+                  .map((s) => {
+                    const info = presentStaffInfo[s.id]
+                    return (
+                      <Link key={s.id} to={s.slug ? `/players/${s.slug}` : '#'} className="flex items-center gap-1.5 hover:text-dart-red transition-colors">
+                        <span className="w-6 h-6 rounded-full border border-brass/50 overflow-hidden shrink-0 bg-ink-2 flex items-center justify-center font-display text-[9px] text-chalk">
+                          {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-full h-full object-cover" /> : s.displayName.trim().slice(0, 2)}
+                        </span>
+                        <span>
+                          <span className="text-chalk text-xs leading-tight flex items-center gap-1.5">
+                            {s.displayName}
+                            {s.isPro && (
+                              <span className="font-tl-mono text-[9px] font-semibold tracking-widest text-ink bg-dart-red px-1 py-0.5 rounded-sm">PRO</span>
+                            )}
+                          </span>
+                          {info.source === 'event' && info.untilTime && (
+                            <span className="font-tl-mono text-[10px] text-chalk-dim block">
+                              〜{new Date(info.untilTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}まで出演
+                            </span>
+                          )}
+                        </span>
+                      </Link>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
         </div>
 
         {availableTabs.length > 0 && (
@@ -532,17 +643,41 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
 
               <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">所属スタッフ</p>
               <div>
-                {staff.map((s) => (
-                  <Link key={s.id} to={s.slug ? `/players/${s.slug}` : '#'} className="flex items-center gap-3 py-3 border-b border-brass/20 hover:text-dart-red transition-colors">
-                    <span className="w-9 h-9 rounded-full border border-brass/50 overflow-hidden shrink-0 bg-ink-2 flex items-center justify-center font-display text-xs text-chalk">
-                      {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-full h-full object-cover" /> : s.displayName.trim().slice(0, 2)}
-                    </span>
-                    <span className="flex-1 min-w-0 text-chalk text-sm truncate">{s.displayName}</span>
-                    {s.isPro && (
-                      <span className="font-tl-mono text-[10px] font-semibold tracking-widest text-ink bg-dart-red px-1.5 py-0.5 rounded-sm shrink-0">PRO</span>
-                    )}
-                  </Link>
-                ))}
+                {staff.map((s) => {
+                  const isPresent = !!presentStaffInfo[s.id]
+                  return (
+                    <Link key={s.id} to={s.slug ? `/players/${s.slug}` : '#'} className="flex items-center gap-3 py-3 border-b border-brass/20 hover:text-dart-red transition-colors">
+                      <span className="w-9 h-9 rounded-full border border-brass/50 overflow-hidden shrink-0 bg-ink-2 flex items-center justify-center font-display text-xs text-chalk">
+                        {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-full h-full object-cover" /> : s.displayName.trim().slice(0, 2)}
+                      </span>
+                      <span className="flex-1 min-w-0 text-chalk text-sm truncate">{s.displayName}</span>
+                      {s.isPro && (
+                        <span className="font-tl-mono text-[10px] font-semibold tracking-widest text-ink bg-dart-red px-1.5 py-0.5 rounded-sm shrink-0">PRO</span>
+                      )}
+                      {viewerIsAdmin ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            toggleStaffAttendance(s.id)
+                          }}
+                          className={`font-tl-mono text-[10px] font-semibold px-2 py-1 rounded-sm shrink-0 border transition-colors ${
+                            isPresent ? 'text-safe-green border-safe-green bg-safe-green/10' : 'text-chalk-dim border-brass/40'
+                          }`}
+                        >
+                          {isPresent ? '出勤中' : '未出勤'}
+                        </button>
+                      ) : (
+                        isPresent && (
+                          <span className="font-tl-mono text-[10px] text-safe-green border border-safe-green/60 px-2 py-1 rounded-sm shrink-0">
+                            出勤中
+                          </span>
+                        )
+                      )}
+                    </Link>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -582,4 +717,3 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
     </div>
   )
 }
-  
