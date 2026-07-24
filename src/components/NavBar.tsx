@@ -41,7 +41,7 @@ export function NavBar() {
   }
 
   return (
-    <nav className="border-b border-brass/35">
+    <nav className="sticky top-0 z-50 border-b border-brass/35 bg-ink">
       <div className="max-w-[600px] mx-auto flex items-center justify-between px-6 py-4">
         <Link to="/" className="font-display text-sm font-bold tracking-[0.15em] uppercase text-chalk">
           ThrowLink
@@ -101,9 +101,9 @@ export function NavBar() {
         </div>
       </div>
 
-      <div className="bg-dart-red/10 border-y border-dart-red/25 px-6 py-2 text-center">
-        <p className="font-tl-mono text-[11px] text-chalk-dim">
-          ⚠ このサイトは開発中です。登録されている情報は実在するものではありません。
+      <div className="bg-dart-red/10 border-t border-dart-red/20 px-6 py-1 text-center">
+        <p className="font-tl-mono text-[10px] text-chalk-dim whitespace-nowrap overflow-hidden text-ellipsis">
+          ⚠ 開発中のサイトです。登録情報はすべて架空のものです。
         </p>
       </div>
 

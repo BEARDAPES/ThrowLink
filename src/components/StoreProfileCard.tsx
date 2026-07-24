@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { FaXTwitter, FaInstagram, FaYoutube, FaTiktok } from 'react-icons/fa6'
 import { EventListSection, type EventListItem } from './EventListSection'
@@ -30,6 +30,7 @@ interface StoreProfileCardProps {
 }
 
 type SnsLink = { platform: string; url: string }
+type TabKey = 'info' | 'events' | 'staff' | 'sns'
 
 const SNS_ICONS: Record<string, React.ReactNode> = {
   x: <FaXTwitter />,
@@ -90,27 +91,47 @@ const DART_RING = `conic-gradient(
   var(--color-cream) 315deg 337.5deg, var(--color-ink-2) 337.5deg 360deg
 )`
 
+const TAB_LABELS: Record<TabKey, string> = {
+  info: '店舗情報',
+  events: 'イベント',
+  staff: 'スタッフ',
+  sns: 'SNS',
+}
+
 export function StoreProfileCard({ profile, store, events, staff, isOwner }: StoreProfileCardProps) {
   const initials = profile.display_name.trim().slice(0, 2) || '?'
   const snsLinks = parseSnsLinks(profile.sns_links)
   const atmosphereTags = Array.isArray(store?.atmosphere_tags) ? (store.atmosphere_tags as string[]) : []
   const openNow = store ? isOpenNow(store.business_open_time, store.business_close_time) : null
 
+  const hasInfoSection = !!(store?.address || store?.phone_number || (store?.business_open_time && store?.business_close_time))
+  const hasEventsSection = events.length > 0
+  const hasStaffSection = staff.length > 0
+  const hasSnsSection = snsLinks.length > 0
+
+  const availableTabs: TabKey[] = [
+    ...(hasInfoSection ? (['info'] as const) : []),
+    ...(hasEventsSection ? (['events'] as const) : []),
+    ...(hasStaffSection ? (['staff'] as const) : []),
+    ...(hasSnsSection ? (['sns'] as const) : []),
+  ]
+
   const now = new Date()
 
-  // イベントカレンダー
   const [evYear, setEvYear] = useState(now.getFullYear())
   const [evMonth, setEvMonth] = useState(now.getMonth())
   const eventMarkers: CalendarMarker[] = events
     .filter((e) => (e.status === 'published' || e.status === 'completed') && e.startAt)
     .map((e) => ({ date: e.startAt!.slice(0, 10), kind: 'event' as const }))
 
-  // スタッフ稼働カレンダー(選択中のスタッフの公開予定を表示)
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(staff[0]?.id ?? null)
   const [staYear, setStaYear] = useState(now.getFullYear())
   const [staMonth, setStaMonth] = useState(now.getMonth())
   const [staffSchedule, setStaffSchedule] = useState<ScheduleEntry[]>([])
   const [staffMarkers, setStaffMarkers] = useState<CalendarMarker[]>([])
+  const [navbarHeight, setNavbarHeight] = useState(66)
+  const [stickyHeaderHeight, setStickyHeaderHeight] = useState(150)
+  const [bottomSpacerHeight, setBottomSpacerHeight] = useState(0)
 
   useEffect(() => {
     async function loadStaffSchedule() {
@@ -156,266 +177,381 @@ export function StoreProfileCard({ profile, store, events, staff, isOwner }: Sto
     })
     .sort((a, b) => a.start_date.localeCompare(b.start_date))
 
-  return (
-    <div className="min-h-screen bg-ink font-tl-sans flex justify-center px-6 py-16 sm:py-24">
-      <div className="w-full max-w-[560px] animate-tl-rise text-left">
-        <div className="flex justify-end items-center gap-2 mb-5">
-          <StarWatchButtons targetId={profile.id} isOwner={!!isOwner} />
-          {isOwner && (
-            <>
-              <Link
-                to="/me/edit"
-                title="編集する"
-                className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                </svg>
-              </Link>
-              <StoreManagementMenu />
-            </>
-          )}
-        </div>
+  const condensedBarRef = useRef<HTMLDivElement>(null)
+  const sectionRefs = {
+    info: useRef<HTMLDivElement>(null),
+    events: useRef<HTMLDivElement>(null),
+    staff: useRef<HTMLDivElement>(null),
+    sns: useRef<HTMLDivElement>(null),
+  }
+  const titleRowRef = useRef<HTMLDivElement>(null)
+  const [activeTab, setActiveTab] = useState<TabKey | null>(availableTabs[0] ?? null)
+  const [condensedTitleVisible, setCondensedTitleVisible] = useState(false)
 
-        <div className="flex gap-4 items-start mb-7">
-          <div
-            className="w-[110px] h-[110px] rounded-full p-1 border-2 border-brass flex items-center justify-center shrink-0"
-            style={{ background: DART_RING }}
-          >
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover border-2 border-dart-red" />
-            ) : (
-              <div className="w-full h-full rounded-full border-2 border-dart-red bg-ink-2 flex items-center justify-center font-display text-2xl font-semibold text-chalk leading-none">
-                {initials}
-              </div>
+  useEffect(() => {
+    const condensedBar = condensedBarRef.current
+    const titleRow = titleRowRef.current
+    if (!condensedBar || !titleRow) return
+
+    const navbarEl = document.querySelector('nav')
+    const measuredNavbarHeight = navbarEl?.getBoundingClientRect().height ?? 66
+    setNavbarHeight(measuredNavbarHeight)
+
+    const stickThreshold = condensedBar.offsetTop - measuredNavbarHeight
+
+    // ヘッダーの最終的な高さ(小タイトル展開時)を、決め打ちの数値ではなく
+    // 実測で求める。scrollHeightはmax-heightによるクリップの影響を受けない
+    // ため、「展開したら何pxになるか」を正確に取得できる。CSS側の余白や
+    // サイズを変更しても、ここを直し忘れる心配が無くなる。
+    const collapsedHeaderHeight = condensedBar.getBoundingClientRect().height
+    const titleRowExpandedHeight = titleRow.scrollHeight
+    const headerHeight = measuredNavbarHeight + collapsedHeaderHeight + titleRowExpandedHeight
+    setStickyHeaderHeight(headerHeight)
+
+    function onScroll() {
+      setCondensedTitleVisible(window.scrollY >= stickThreshold - 1)
+
+      const lastTab = availableTabs[availableTabs.length - 1]
+      const lastEl = lastTab ? sectionRefs[lastTab].current : null
+      if (lastEl) {
+        const lastSectionHeight = lastEl.getBoundingClientRect().height
+        setBottomSpacerHeight(Math.max(0, window.innerHeight - headerHeight - lastSectionHeight))
+      }
+
+      const spyPoint = condensedBar!.getBoundingClientRect().bottom
+      let current: TabKey | null = null
+      for (const key of availableTabs) {
+        const el = sectionRefs[key].current
+        if (el && el.getBoundingClientRect().top <= spyPoint + 40) current = key
+      }
+      if (current) setActiveTab(current)
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableTabs.join(',')])
+
+  return (
+    <div className="font-tl-sans px-6 pt-10 pb-24 sm:pt-14">
+      <div className="w-full max-w-[560px] mx-auto">
+        <div className="animate-tl-rise text-left">
+          <div className="flex justify-end items-center gap-2 mb-5">
+            <StarWatchButtons targetId={profile.id} isOwner={!!isOwner} />
+            {isOwner && (
+              <>
+                <Link
+                  to="/me/edit"
+                  title="編集する"
+                  className="flex items-center justify-center w-8 h-8 border border-brass/40 rounded-sm text-chalk-dim hover:text-dart-red hover:border-dart-red transition-colors"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                </Link>
+                <StoreManagementMenu />
+              </>
             )}
           </div>
 
-          <div className="flex-1 min-w-0 pt-1">
-            <h1 className="font-display text-2xl sm:text-[26px] font-bold uppercase tracking-wide text-chalk leading-[1.1]">
-              {profile.display_name}
-            </h1>
-
-            {openNow !== null && (
-              <div className="mt-2">
-                <span
-                  className="inline-flex items-center gap-1.5 font-tl-mono text-[11px] rounded-sm px-2.5 py-0.5 leading-none"
-                  style={{
-                    color: 'var(--color-chalk)',
-                    border: `1px solid ${openNow ? 'var(--color-safe-green)' : 'rgba(183,175,154,0.5)'}`,
-                  }}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: openNow ? 'var(--color-safe-green)' : 'var(--color-chalk-dim)' }} />
-                  {openNow ? `営業中(〜${formatTime(store!.business_close_time)})` : '営業時間外'}
-                </span>
-              </div>
-            )}
-
-            <div className="flex items-center flex-wrap gap-1.5 mt-2">
-              {store?.dartslive_shop_url && (
-                <a
-                  href={store.dartslive_shop_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-tl-mono text-[10px] font-semibold px-2 py-0.5 rounded-sm leading-none"
-                  style={{ background: '#E8720C', color: '#2A1200' }}
-                >
-                  DARTSLIVE設置店 ↗
-                </a>
-              )}
-              {store?.phoenix_shop_url && (
-                <a
-                  href={store.phoenix_shop_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-tl-mono text-[10px] font-semibold px-2 py-0.5 rounded-sm leading-none"
-                  style={{ background: '#D6304A', color: '#2A0007' }}
-                >
-                  PHOENIX設置店 ↗
-                </a>
-              )}
-              {store?.smoking_allowed != null && (
-                <span
-                  title={store.smoking_allowed ? '喫煙可' : '禁煙'}
-                  className="inline-flex items-center justify-center w-[22px] h-[22px] border border-brass/50 rounded-sm text-chalk-dim"
-                >
-                  {store.smoking_allowed ? (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 17h14"/><path d="M2 21h18"/><path d="M18 13v-1a2 2 0 0 1 4 0v1"/><path d="M18 17v-1a2 2 0 0 1 4 0v1"/></svg>
-                  ) : (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 17h9"/><path d="M2 21h13"/><path d="m19 21-1-4"/><path d="M13 13v-1a2 2 0 0 1 4 0"/><path d="M2 2l20 20"/></svg>
-                  )}
-                </span>
-              )}
-              {store?.parking_available != null && (
-                <span
-                  title={store.parking_available ? '駐車場あり' : '駐車場なし'}
-                  className="inline-flex items-center justify-center w-[22px] h-[22px] border border-brass/50 rounded-sm text-chalk-dim"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg>
-                </span>
+          <div className="flex gap-4 items-start mb-3.5">
+            <div
+              className="w-[110px] h-[110px] rounded-full p-1 border-2 border-brass flex items-center justify-center shrink-0"
+              style={{ background: DART_RING }}
+            >
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover border-2 border-dart-red" />
+              ) : (
+                <div className="w-full h-full rounded-full border-2 border-dart-red bg-ink-2 flex items-center justify-center font-display text-2xl font-semibold text-chalk leading-none">
+                  {initials}
+                </div>
               )}
             </div>
 
-            {atmosphereTags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {atmosphereTags.map((tag) => (
-                  <span key={tag} className="font-tl-mono text-[10px] rounded-full px-2.5 py-0.5 border border-brass/50 text-chalk-dim leading-none">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+            <div className="flex-1 min-w-0 pt-1">
+              <h1 className="font-display text-2xl sm:text-[26px] font-bold uppercase tracking-wide text-chalk leading-[1.1]">
+                {profile.display_name}
+              </h1>
 
-        {(store?.address || store?.phone_number || (store?.business_open_time && store?.business_close_time)) && (
-          <div className="space-y-3.5 mb-7">
-            {store?.address && (
-              <div>
-                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">住所</div>
-                <div className="text-[13px] text-chalk">{store.address}</div>
-                <div className="border border-brass/40 rounded-sm overflow-hidden mt-2">
-                  <iframe
-                    title="店舗地図"
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(store.address)}&output=embed`}
-                    className="w-full h-[160px] border-0"
-                    loading="lazy"
-                  />
+              {openNow !== null && (
+                <div className="mt-2">
+                  <span
+                    className="inline-flex items-center gap-1.5 font-tl-mono text-[11px] rounded-sm px-2.5 py-0.5 leading-none"
+                    style={{
+                      color: 'var(--color-chalk)',
+                      border: `1px solid ${openNow ? 'var(--color-safe-green)' : 'rgba(183,175,154,0.5)'}`,
+                    }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: openNow ? 'var(--color-safe-green)' : 'var(--color-chalk-dim)' }} />
+                    {openNow ? `営業中(〜${formatTime(store!.business_close_time)})` : '営業時間外'}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center flex-wrap gap-1.5 mt-2">
+                {store?.dartslive_shop_url && (
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.address)}`}
+                    href={store.dartslive_shop_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="block text-center py-2 font-tl-mono text-[11px] text-chalk-dim hover:text-dart-red transition-colors border-t border-brass/30"
+                    className="font-tl-mono text-[10px] font-semibold px-2 py-0.5 rounded-sm leading-none"
+                    style={{ background: '#E8720C', color: '#2A1200' }}
                   >
-                    Googleマップで開く ↗
+                    DARTSLIVE設置店 ↗
                   </a>
-                </div>
+                )}
+                {store?.phoenix_shop_url && (
+                  <a
+                    href={store.phoenix_shop_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-tl-mono text-[10px] font-semibold px-2 py-0.5 rounded-sm leading-none"
+                    style={{ background: '#D6304A', color: '#2A0007' }}
+                  >
+                    PHOENIX設置店 ↗
+                  </a>
+                )}
+                {store?.smoking_allowed != null && (
+                  <span
+                    title={store.smoking_allowed ? '喫煙可' : '禁煙'}
+                    className="inline-flex items-center justify-center w-[22px] h-[22px] border border-brass/50 rounded-sm text-chalk-dim"
+                  >
+                    {store.smoking_allowed ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 17h14"/><path d="M2 21h18"/><path d="M18 13v-1a2 2 0 0 1 4 0v1"/><path d="M18 17v-1a2 2 0 0 1 4 0v1"/></svg>
+                    ) : (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 17h9"/><path d="M2 21h13"/><path d="m19 21-1-4"/><path d="M13 13v-1a2 2 0 0 1 4 0"/><path d="M2 2l20 20"/></svg>
+                    )}
+                  </span>
+                )}
+                {store?.parking_available != null && (
+                  <span
+                    title={store.parking_available ? '駐車場あり' : '駐車場なし'}
+                    className="inline-flex items-center justify-center w-[22px] h-[22px] border border-brass/50 rounded-sm text-chalk-dim"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg>
+                  </span>
+                )}
               </div>
-            )}
-            {store?.phone_number && (
-              <div>
-                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">電話番号</div>
-                <a href={`tel:${store.phone_number}`} className="text-[13px] text-chalk underline decoration-brass/50 underline-offset-4 hover:text-dart-red transition-colors">
-                  {store.phone_number}
-                </a>
-              </div>
-            )}
-            {store?.business_open_time && store?.business_close_time && (
-              <div>
-                <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">営業時間</div>
-                <div className="text-[13px] text-chalk">
-                  {formatTime(store.business_open_time)} 〜 {formatTime(store.business_close_time)}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
-        {profile.bio_text && (
-          <div className="mb-10 pb-8 border-b border-brass/35">
-            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-2.5 leading-none">お店について</p>
-            <p className="text-[15px] leading-loose text-chalk">{profile.bio_text}</p>
+              {atmosphereTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {atmosphereTags.map((tag) => (
+                    <span key={tag} className="font-tl-mono text-[10px] rounded-full px-2.5 py-0.5 border border-brass/50 text-chalk-dim leading-none">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        )}
+        </div>
 
-        {staff.length > 0 && (
-          <div className="mb-10">
-            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">スタッフ稼働カレンダー</p>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {staff.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelectedStaffId(s.id)}
-                  className={`font-tl-mono text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
-                    selectedStaffId === s.id ? 'border-brass bg-ink-2 text-chalk' : 'border-brass/35 text-chalk-dim hover:border-brass'
+        {availableTabs.length > 0 && (
+          <div
+            ref={condensedBarRef}
+            className="sticky z-40 bg-ink -mx-6 px-6 pt-2.5 border-b border-brass/35"
+            style={{ top: navbarHeight, marginTop: '0.5rem' }}
+          >
+            <div
+              ref={titleRowRef}
+              className="flex items-center gap-2.5 overflow-hidden pb-2 transition-[max-height,opacity] duration-150 ease-out"
+              style={condensedTitleVisible ? { maxHeight: 32, opacity: 1 } : { maxHeight: 0, opacity: 0 }}
+            >
+              <span className="w-[22px] h-[22px] rounded-full border border-brass overflow-hidden shrink-0 bg-ink-2">
+                {profile.avatar_url && <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />}
+              </span>
+              <span className="font-display text-[13px] font-semibold uppercase tracking-wide text-chalk truncate">
+                {profile.display_name}
+              </span>
+              {openNow !== null && (
+                <span className="ml-auto pl-2.5 shrink-0 inline-flex items-center gap-1 font-tl-mono text-[10px] text-chalk-dim">
+                  <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ background: openNow ? 'var(--color-safe-green)' : 'var(--color-chalk-dim)' }} />
+                  {openNow ? '営業中' : '営業時間外'}
+                </span>
+              )}
+            </div>
+            <div className="flex">
+              {availableTabs.map((tab) => (
+                <a
+                  key={tab}
+                  href={`#${tab}`}
+                  className={`font-tl-mono text-xs pb-2.5 mr-5 border-b-2 transition-colors ${
+                    activeTab === tab ? 'text-chalk border-dart-red' : 'text-chalk-dim border-transparent hover:text-chalk'
                   }`}
                 >
-                  {s.displayName}
-                </button>
+                  {TAB_LABELS[tab]}
+                </a>
               ))}
             </div>
-            <MonthCalendar markers={staffMarkers} year={staYear} month={staMonth} onPrevMonth={() => (staMonth === 0 ? (setStaYear((y) => y - 1), setStaMonth(11)) : setStaMonth((m) => m - 1))} onNextMonth={() => (staMonth === 11 ? (setStaYear((y) => y + 1), setStaMonth(0)) : setStaMonth((m) => m + 1))} />
-            <div className="mt-4 space-y-2">
-              {staffListItems.length === 0 ? (
-                <p className="text-xs text-chalk-dim">この月の不在予定はありません。</p>
-              ) : (
-                staffListItems.map((entry) => (
-                  <div key={entry.id} className="flex items-center gap-2 py-2 border-b border-brass/20">
-                    <span className="w-1.5 h-1.5 rounded-full bg-dart-red shrink-0" />
-                    <span className="font-tl-mono text-xs text-chalk-dim shrink-0">{formatDateRange(entry.start_date, entry.end_date)}</span>
-                    {entry.reason && <span className="text-chalk text-sm truncate">{entry.reason}</span>}
+          </div>
+        )}
+
+        <div className="pt-8 text-left">
+          {hasInfoSection && (
+            <div id="info" ref={sectionRefs.info} className="mb-10" style={{ scrollMarginTop: stickyHeaderHeight + 24 }}>
+              <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">店舗情報</p>
+              <div className="space-y-3.5">
+                {store?.address && (
+                  <div>
+                    <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">住所</div>
+                    <div className="text-[13px] text-chalk">{store.address}</div>
+                    <div className="border border-brass/40 rounded-sm overflow-hidden mt-2">
+                      <iframe
+                        title="店舗地図"
+                        src={`https://maps.google.com/maps?q=${encodeURIComponent(store.address)}&output=embed`}
+                        className="w-full h-[160px] border-0"
+                        loading="lazy"
+                      />
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.address)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block text-center py-2 font-tl-mono text-[11px] text-chalk-dim hover:text-dart-red transition-colors border-t border-brass/30"
+                      >
+                        Googleマップで開く ↗
+                      </a>
+                    </div>
                   </div>
-                ))
-              )}
+                )}
+                {store?.phone_number && (
+                  <div>
+                    <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">電話番号</div>
+                    <a href={`tel:${store.phone_number}`} className="text-[13px] text-chalk underline decoration-brass/50 underline-offset-4 hover:text-dart-red transition-colors">
+                      {store.phone_number}
+                    </a>
+                  </div>
+                )}
+                {store?.business_open_time && store?.business_close_time && (
+                  <div>
+                    <div className="font-tl-mono text-[10px] text-chalk-dim tracking-wide mb-1 leading-none">営業時間</div>
+                    <div className="text-[13px] text-chalk">
+                      {formatTime(store.business_open_time)} 〜 {formatTime(store.business_close_time)}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {events.length > 0 && (
-          <div className="mb-10">
-            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">イベントカレンダー</p>
-            <MonthCalendar markers={eventMarkers} year={evYear} month={evMonth} onPrevMonth={() => (evMonth === 0 ? (setEvYear((y) => y - 1), setEvMonth(11)) : setEvMonth((m) => m - 1))} onNextMonth={() => (evMonth === 11 ? (setEvYear((y) => y + 1), setEvMonth(0)) : setEvMonth((m) => m + 1))} />
-            <div className="mt-4 space-y-2">
-              {eventListItems.length === 0 ? (
-                <p className="text-xs text-chalk-dim">この月のイベントはありません。</p>
-              ) : (
-                eventListItems.map((e) => (
-                  <Link key={e.id} to={`/events/${e.id}`} className="flex items-center gap-2 py-2 border-b border-brass/20 hover:text-dart-red transition-colors">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brass shrink-0" />
-                    <span className="font-tl-mono text-xs text-chalk-dim shrink-0">
-                      {new Date(e.startAt!).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' })}
+          {profile.bio_text && (
+            <div className="mb-10 pb-8 border-b border-brass/35">
+              <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-2.5 leading-none">お店について</p>
+              <p className="text-[15px] leading-loose text-chalk">{profile.bio_text}</p>
+            </div>
+          )}
+
+          {hasEventsSection && (
+            <div id="events" ref={sectionRefs.events} className="mb-10" style={{ scrollMarginTop: stickyHeaderHeight + 24 }}>
+              <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">イベントカレンダー</p>
+              <MonthCalendar
+                markers={eventMarkers}
+                year={evYear}
+                month={evMonth}
+                onPrevMonth={() => (evMonth === 0 ? (setEvYear((y) => y - 1), setEvMonth(11)) : setEvMonth((m) => m - 1))}
+                onNextMonth={() => (evMonth === 11 ? (setEvYear((y) => y + 1), setEvMonth(0)) : setEvMonth((m) => m + 1))}
+              />
+              <div className="mt-4 space-y-2 mb-6">
+                {eventListItems.length === 0 ? (
+                  <p className="text-xs text-chalk-dim">この月のイベントはありません。</p>
+                ) : (
+                  eventListItems.map((e) => (
+                    <Link key={e.id} to={`/events/${e.id}`} className="flex items-center gap-2 py-2 border-b border-brass/20 hover:text-dart-red transition-colors">
+                      <span className="w-1.5 h-1.5 rounded-full bg-brass shrink-0" />
+                      <span className="font-tl-mono text-xs text-chalk-dim shrink-0">
+                        {new Date(e.startAt!).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' })}
+                      </span>
+                      <span className="text-chalk text-sm truncate">{e.title}</span>
+                    </Link>
+                  ))
+                )}
+              </div>
+              <EventListSection events={events} />
+            </div>
+          )}
+
+          {hasStaffSection && (
+            <div id="staff" ref={sectionRefs.staff} className="mb-10" style={{ scrollMarginTop: stickyHeaderHeight + 24 }}>
+              <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">スタッフ稼働カレンダー</p>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {staff.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedStaffId(s.id)}
+                    className={`font-tl-mono text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                      selectedStaffId === s.id ? 'border-brass bg-ink-2 text-chalk' : 'border-brass/35 text-chalk-dim hover:border-brass'
+                    }`}
+                  >
+                    {s.displayName}
+                  </button>
+                ))}
+              </div>
+              <MonthCalendar
+                markers={staffMarkers}
+                year={staYear}
+                month={staMonth}
+                onPrevMonth={() => (staMonth === 0 ? (setStaYear((y) => y - 1), setStaMonth(11)) : setStaMonth((m) => m - 1))}
+                onNextMonth={() => (staMonth === 11 ? (setStaYear((y) => y + 1), setStaMonth(0)) : setStaMonth((m) => m + 1))}
+              />
+              <div className="mt-4 space-y-2 mb-6">
+                {staffListItems.length === 0 ? (
+                  <p className="text-xs text-chalk-dim">この月の不在予定はありません。</p>
+                ) : (
+                  staffListItems.map((entry) => (
+                    <div key={entry.id} className="flex items-center gap-2 py-2 border-b border-brass/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-dart-red shrink-0" />
+                      <span className="font-tl-mono text-xs text-chalk-dim shrink-0">{formatDateRange(entry.start_date, entry.end_date)}</span>
+                      {entry.reason && <span className="text-chalk text-sm truncate">{entry.reason}</span>}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">所属スタッフ</p>
+              <div>
+                {staff.map((s) => (
+                  <Link key={s.id} to={s.slug ? `/players/${s.slug}` : '#'} className="flex items-center gap-3 py-3 border-b border-brass/20 hover:text-dart-red transition-colors">
+                    <span className="w-9 h-9 rounded-full border border-brass/50 overflow-hidden shrink-0 bg-ink-2 flex items-center justify-center font-display text-xs text-chalk">
+                      {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-full h-full object-cover" /> : s.displayName.trim().slice(0, 2)}
                     </span>
-                    <span className="text-chalk text-sm truncate">{e.title}</span>
+                    <span className="flex-1 min-w-0 text-chalk text-sm truncate">{s.displayName}</span>
+                    {s.isPro && (
+                      <span className="font-tl-mono text-[10px] font-semibold tracking-widest text-ink bg-dart-red px-1.5 py-0.5 rounded-sm shrink-0">PRO</span>
+                    )}
                   </Link>
-                ))
-              )}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {staff.length > 0 && (
-          <div className="mb-10">
-            <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">所属スタッフ</p>
-            <div>
-              {staff.map((s) => (
-                <Link key={s.id} to={s.slug ? `/players/${s.slug}` : '#'} className="flex items-center gap-3 py-3 border-b border-brass/20 hover:text-dart-red transition-colors">
-                  <span className="w-9 h-9 rounded-full border border-brass/50 overflow-hidden shrink-0 bg-ink-2 flex items-center justify-center font-display text-xs text-chalk">
-                    {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="w-full h-full object-cover" /> : s.displayName.trim().slice(0, 2)}
-                  </span>
-                  <span className="flex-1 min-w-0 text-chalk text-sm truncate">{s.displayName}</span>
-                  {s.isPro && (
-                    <span className="font-tl-mono text-[10px] font-semibold tracking-widest text-ink bg-dart-red px-1.5 py-0.5 rounded-sm shrink-0">PRO</span>
-                  )}
-                </Link>
-              ))}
+          {hasSnsSection && (
+            <div id="sns" ref={sectionRefs.sns} className="mb-10" style={{ scrollMarginTop: stickyHeaderHeight + 24 }}>
+              <p className="font-tl-mono text-xs text-chalk-dim tracking-wide mb-3">SNS</p>
+              <div className="border-t border-brass/35">
+                {snsLinks.map((link) => (
+                  <a
+                    key={link.platform}
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3 py-3 border-b border-brass/20 text-chalk hover:text-dart-red transition-colors group"
+                  >
+                    <span className="w-5 h-5 flex items-center justify-center shrink-0 text-chalk-dim text-lg group-hover:text-dart-red transition-colors">
+                      {SNS_ICONS[link.platform]}
+                    </span>
+                    <span className="font-tl-mono text-sm tracking-wide flex-1">{SNS_LABELS[link.platform] ?? link.platform}</span>
+                    <span className="text-chalk-dim text-xs group-hover:text-dart-red transition-colors">↗</span>
+                  </a>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-
-        <EventListSection events={events} />
-
-        {snsLinks.length > 0 && (
-          <div className="border-t border-brass/35 mb-10">
-            {snsLinks.map((link) => (
-              <a
-                key={link.platform}
-                href={link.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-3 py-3 border-b border-brass/20 text-chalk hover:text-dart-red transition-colors group"
-              >
-                <span className="w-5 h-5 flex items-center justify-center shrink-0 text-chalk-dim text-lg group-hover:text-dart-red transition-colors">
-                  {SNS_ICONS[link.platform]}
-                </span>
-                <span className="font-tl-mono text-sm tracking-wide flex-1">{SNS_LABELS[link.platform] ?? link.platform}</span>
-                <span className="text-chalk-dim text-xs group-hover:text-dart-red transition-colors">↗</span>
-              </a>
-            ))}
-          </div>
-        )}
+          )}
+        </div>
       </div>
+      <div style={{ height: bottomSpacerHeight }} />
     </div>
   )
 }
+  
